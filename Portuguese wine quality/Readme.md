@@ -32,19 +32,19 @@ The dataset that's we see here contains 12 columns and 4898 entries of data abou
 Predict which wines are 'Good/1' and 'Not Good/0' (binary classification; check balance of classes; save predictions to .csv)
 
 
-[Part 1: Import, Load Data](./Wine%20quality%20-%20Classification.ipynb#Comclusion)
+[Part 1: Import, Load Data](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
 
-[Part 2: Exploratory Data Analysis](Wine%20quality%20-%20Classification.ipynb#Part-2-Exploratory-Data-Analysis)
+[Part 2: Exploratory Data Analysis](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
 
-[Part 3: Data Wrangling and Transformation](Wine%20quality%20-%20Classification.ipynb#part-3-data-wrangling-and-transformation)  
+[Part 3: Data Wrangling and Transformation](Classification_Portuguese_Wines.ipynb##Middle-conclusion)  
 
-[Part 4: Machine Learning](Wine%20quality%20-%20Classification.ipynb#Part-4-Machine-Learning)
+[Part 4: Machine Learning](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
 
-[Conclusion](Wine%20quality%20-%20Classification.ipynb#conclusion)
+[Middle Conclusion](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
+
+[Final Conclusion](Classification_Portuguese_Wines.ipynb##The-Final)
 
 ![Final Results/](Final_results.png)
-
-![graph](https://raw.githubusercontent.com/<user>/<repo>/<branch>/<path>/image.png)
 
 #### The final  
 **The final Ensemble** model proves to be the most robust solution, effectively leveraging the complementary strengths of Gradient Boosting and KNN. 
