@@ -1,6 +1,25 @@
 ## Classification of the Quality of Portuguese White Wines  
     
-Predict which wines are 'Good/1' and 'Not Good/0' (binary classification; check balance of classes; save predictions to .csv)
+**Goal of the Project**  
+Predict wine quality in advance — using physicochemical characteristics, without relying on tasting. 
+
+**Who Needs This**  
+
+**1) Winemakers:**   
+• identify promising batches early;  
+• decide on processing, blending, or aging.  
+**2) Buyers, sommeliers, distributors:**   
+• build a reliable and diverse assortment;  
+• avoid purchasing low-quality batches.  
+**Both types of errors are costly:**   
+• missing a good wine = lost profit;   
+• accepting a poor wine as good = quality risks and financial losses.   
+➡ The model must classify **both classes equally accurately**, without favoring one over the other.  
+
+**Evaluation metrics**
+Therefore, **F1-score** (which controls the balance of Precision and Recall in the case of class imbalance)  
+and **PR-AUC** (which shows the stability of the model when an important class is selected and works more reliably than Accuracy on unbalanced data)  
+are chosen to evaluate the model.
 
 [Jupyter Notebook](Classification_Portuguese_Wines.ipynb##The-Final)
 
