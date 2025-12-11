@@ -1,52 +1,12 @@
-Classification Portuguese Wines 
-
-## Classification of the Quality of Portuguese White Wines 
-
-Toolset: Logistic Regression & KNN & Decision Tree comparison  
-with hyperparameters  
-with over/under-sampling  
-*after middle conclusion:* RandomForest, Boosting & Ensemles
-
-## Table of Contents
-
-### Introduction: Data set Overview
-The dataset that's we see here contains 12 columns and 4898 entries of data about Portuguese white wines.
-
- **Properties:**
-    
-* **fixed acidity**  
-* **volatile acidity**  
-* **citric acid**  
-* **residual sugar**  
-* **chlorides**  
-* **free sulfur dioxide**  
-* **total sulfur dioxide**  
-* **density**  
-* **pH**  
-* **sulphates**  
-* **alcohol**  
-* **quality** 
-
-### Questions:
+## Classification of the Quality of Portuguese White Wines  
     
 Predict which wines are 'Good/1' and 'Not Good/0' (binary classification; check balance of classes; save predictions to .csv)
 
-
-[Part 1: Import, Load Data](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
-
-[Part 2: Exploratory Data Analysis](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
-
-[Part 3: Data Wrangling and Transformation](Classification_Portuguese_Wines.ipynb##Middle-conclusion)  
-
-[Part 4: Machine Learning](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
-
-[Middle Conclusion](Classification_Portuguese_Wines.ipynb##Middle-conclusion)
-
-[Final Conclusion](Classification_Portuguese_Wines.ipynb##The-Final)
+[Jupyter Notebook](Classification_Portuguese_Wines.ipynb##The-Final)
 
 ![Final Results/](Final_results.png)
 
-#### The final  
+#### The final Conclusion 
 **The final Ensemble** model proves to be the most robust solution, effectively leveraging the complementary strengths of Gradient Boosting and KNN. 
 It *achieves the highest* overall PR-AUC score (~0.833) and F1-score (~0.714), providing the best trade-off between identifying good wines (Recall) and minimizing false positives (Precision).  
 The confusion matrix confirms it correctly identifies a significant portion of the minority class while maintaining high accuracy on the majority class.    
@@ -70,4 +30,4 @@ GB usually beats RF on tabular data, but watch for over-fit; use **validation_fr
 
 ------------------------------------------------
 
-#### If I find data about Georgian wines I could taste it by myself!)
+#### Once I find data about Georgian wines, I'll be able to taste them myself!
