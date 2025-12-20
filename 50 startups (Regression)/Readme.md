@@ -30,7 +30,7 @@ We have comparison of two models: Linear Regression and Gradient Boosting Regres
 
 [Jupyter Notebook](50_startups.ipynb##Project-Conclusion)
 
-![Final Results/](LRvsGB_results.png)
+![Final Results](LRvsGB.png)
 
 ## Project Conclusion
 
