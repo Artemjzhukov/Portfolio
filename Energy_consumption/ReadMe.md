@@ -1,30 +1,48 @@
-## Improvement Recommendations:  
-Data Enhancement
+# ⚡ AEP Energy Consumption Forecasting
 
-Integrate weather data (temperature/humidity) and holiday calendar
+![Python](https://img.shields.io/badge/Python-3.9-3776AB?style=flat&logo=python&logoColor=white)
+![Sklearn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikit-learn&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat&logo=pandas&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Completed-success)
 
-Add tariff schedules and building occupancy metrics
+## 📖 Project Overview
+Accurate energy demand forecasting is vital for utility companies to optimize grid stability and reduce costs. This project builds a time-series regression model to predict hourly energy consumption (in Megawatts) for American Electric Power (AEP).
 
-Model Upgrades
+The solution leverages feature engineering (lags, rolling windows, cyclic encoding) and Ridge Regression to achieve high predictive accuracy.
 
-Implement LSTM/Prophet for sequence modeling
+## 📊 Dataset
+* **Source:** AEP Hourly Energy Consumption Data.
+* **Target:** `AEP_MW` (Hourly energy demand).
+* **Size:** ~120,000 hourly observations (2004-2018).
 
-Add hyperparameter tuning and cross-validation
+## 🛠 Methodology
 
-Create ensemble of multiple models
+### 1. Feature Engineering
+Time-series models require robust features to capture patterns:
+* **Lag Features:** Added `lag_1h` and `lag_24h` to capture autocorrelation.
+* **Rolling Statistics:** Calculated 24-hour and 7-day rolling means to smooth volatility.
+* **Cyclic Encoding:** Transformed `hour`, `day`, `month`, and `weekday` into Sine/Cosine pairs to preserve temporal continuity (e.g., 23:00 is close to 00:00).
 
-Deployment Features
+### 2. Modeling
+* **Split:** Chronological split (Train < 2017, Test >= 2017).
+* **Algorithm:** **Ridge Regression** with `GridSearchCV` and `TimeSeriesSplit` for robust hyperparameter tuning.
+* **Scaling:** Standard scaling was applied to all features.
 
-Real-time anomaly alert system
+---
 
-API for consumption predictions
+## 📈 Results
 
-Automated report generation for peak management
+The model demonstrated strong performance on the test set:
 
-Analysis Expansion
+| Metric | Score |
+| :--- | :---: |
+| **R² Score** | **0.963** |
+| **MAE** | 334.92 MW |
+| **RMSE** | 462 MW |
 
-Cost optimization simulations
+## 💡 Key Insights
+* **Autoregression works:** Immediate past consumption (1 hour ago) is the single strongest predictor.
+* **Cyclic features matter:** Encoding time cyclically helps linear models understand seasonality better than raw integers.
 
-Renewable energy integration analysis
-
-Equipment failure predictive maintenance
+**To do**  
+Seasonality Insight

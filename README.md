@@ -7,7 +7,7 @@ Link to projects:
 [Classification with Logistic Regression(Tuned), DT, KNN, RF, GB and Ensembles](https://github.com/Artemjzhukov/Portfolio/blob/main/Portuguese%20wine%20quality/Classification_Portuguese_Wines.ipynb##The-Final).
 
 3.
-[Forecasting electricity consumption (AEP_MW) based on time series](https://github.com/Artemjzhukov/Portfolio/blob/main/).
+[Forecasting electricity consumption (AEP_MW) based on time series](https://github.com/Artemjzhukov/Portfolio/blob/main/Energy_consumption/Energy_consumption.ipynb).
 
 4.
 [Predicting bankruptcy of companies](https://github.com/Artemjzhukov/Portfolio/blob/main/).
