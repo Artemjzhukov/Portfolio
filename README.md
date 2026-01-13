@@ -10,7 +10,7 @@ Link to projects:
 [Forecasting electricity consumption (AEP_MW) based on time series](https://github.com/Artemjzhukov/Portfolio/blob/main/Energy_consumption/Energy_consumption.ipynb).
 
 4.
-[Predicting bankruptcy of companies](https://github.com/Artemjzhukov/Portfolio/blob/main/).
+[Predicting bankruptcy of companies](https://github.com/Artemjzhukov/Portfolio/blob/main/Bancrupcy/Bancrupcy_features_selection.ipynb).
 
 5.
-[final competition ODS december 2025](https://github.com/Artemjzhukov/Portfolio/blob/main/).
+[final competition ODS december 2025](https://github.com/Artemjzhukov/Portfolio/blob/main/Turnstile/turnstile.ipynb).
