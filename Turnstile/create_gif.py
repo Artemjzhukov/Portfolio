@@ -6,7 +6,8 @@ image_paths = [
     r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-20.jpg",   # замените на реальный путь
     r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-15.jpg",
     r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-08.jpg",
-    r"C:\Users\mamon\Downloads\photo_2026-04-24_12-57-52.jpg"
+    r"C:\Users\mamon\Downloads\photo_2026-04-24_12-57-52.jpg",
+    r"C:\Users\mamon\Downloads\photo_2026-04-25_14-20-03.jpg"
 ]
 
 # Папка и имя для сохранения GIF
