@@ -1,0 +1,7 @@
+langchain==0.1.0
+langchain-community
+chromadb
+pydantic
+openai
+python-dotenv
+python-telegram-bot
