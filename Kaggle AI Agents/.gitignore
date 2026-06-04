@@ -1,3 +1,4 @@
 /pass
 .env
 __pycache__/
+/datebase
