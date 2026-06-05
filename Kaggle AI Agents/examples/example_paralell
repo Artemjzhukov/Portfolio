@@ -1,0 +1,152 @@
+# Tech Researcher: Focuses on AI and ML trends.
+tech_researcher = Agent(
+    name="TechResearcher",
+    model=Gemini(
+        model="gemini-2.5-flash-lite",
+        retry_options=retry_config
+    ),
+    instruction="""Research the latest AI/ML trends. Include 3 key developments,
+the main companies involved, and the potential impact. Keep the report very concise (100 words).""",
+    tools=[google_search],
+    output_key="tech_research",  # The result of this agent will be stored in the session state with this key.
+)
+
+print("✅ tech_researcher created.")
+
+# Health Researcher: Focuses on medical breakthroughs.
+health_researcher = Agent(
+    name="HealthResearcher",
+    model=Gemini(
+        model="gemini-2.5-flash-lite",
+        retry_options=retry_config
+    ),
+    instruction="""Research recent medical breakthroughs. Include 3 significant advances,
+their practical applications, and estimated timelines. Keep the report concise (100 words).""",
+    tools=[google_search],
+    output_key="health_research",  # The result will be stored with this key.
+)
+
+print("✅ health_researcher created.")
+
+# Finance Researcher: Focuses on fintech trends.
+finance_researcher = Agent(
+    name="FinanceResearcher",
+    model=Gemini(
+        model="gemini-2.5-flash-lite",
+        retry_options=retry_config
+    ),
+    instruction="""Research current fintech trends. Include 3 key trends,
+their market implications, and the future outlook. Keep the report concise (100 words).""",
+    tools=[google_search],
+    output_key="finance_research",  # The result will be stored with this key.
+)
+
+print("✅ finance_researcher created.")
+
+# The AggregatorAgent runs *after* the parallel step to synthesize the results.
+aggregator_agent = Agent(
+    name="AggregatorAgent",
+    model=Gemini(
+        model="gemini-2.5-flash-lite",
+        retry_options=retry_config
+    ),
+    # It uses placeholders to inject the outputs from the parallel agents, which are now in the session state.
+    instruction="""Combine these three research findings into a single executive summary:
+
+    **Technology Trends:**
+    {tech_research}
+    
+    **Health Breakthroughs:**
+    {health_research}
+    
+    **Finance Innovations:**
+    {finance_research}
+    
+    Your summary should highlight common themes, surprising connections, and the most important key takeaways from all three reports. The final summary should be around 200 words.""",
+    output_key="executive_summary",  # This will be the final output of the entire system.
+)
+
+print("✅ aggregator_agent created.")
+
+# The ParallelAgent runs all its sub-agents simultaneously.
+parallel_research_team = ParallelAgent(
+    name="ParallelResearchTeam",
+    sub_agents=[tech_researcher, health_researcher, finance_researcher],
+)
+
+# This SequentialAgent defines the high-level workflow: run the parallel team first, then run the aggregator.
+root_agent = SequentialAgent(
+    name="ResearchSystem",
+    sub_agents=[parallel_research_team, aggregator_agent],
+)
+
+print("✅ Parallel and Sequential Agents created.")
+
+runner = InMemoryRunner(agent=root_agent)
+response = await runner.run_debug(
+    "Run the daily executive briefing on Tech, Health, and Finance"
+)
+
+''' 
+### Created new session: debug_session_id
+
+User > Run the daily executive briefing on Tech, Health, and Finance
+TechResearcher > **AI/ML Trends Update:**
+
+Three key AI/ML developments are shaping the technological landscape:
+
+1.  **Generative AI's Rapid Adoption:** Organizations are increasingly implementing generative AI across business functions to boost efficiency. Companies like OpenAI, Google, and Microsoft are at the forefront of this trend.
+2.  **Multimodal AI:** This trend involves AI models processing diverse data types (text, image, sound) to better mimic human sensory processing. It's driving innovation in areas like marketing content generation and smart home applications.
+3.  **Ethical and Explainable AI:** With AI's growing influence, there's a significant focus on ensuring fairness, transparency, and accountability in AI systems. This includes developing "explainable AI" (XAI) to make AI decisions understandable.
+
+These advancements are poised to revolutionize industries, enhance customer experiences, and necessitate workforce reskilling, with AI's economic impact projected to be substantial.
+FinanceResearcher > **Tech Briefing**
+
+Artificial Intelligence (AI) continues to dominate technology trends, with a focus on AI-native development platforms and AI supercomputing to drive innovation and efficiency. Europe is pushing for technological sovereignty, aiming to compete in AI by nurturing homegrown champions. The cybersecurity implications of AI are also paramount, with government agencies implementing executive orders to test and secure AI models.
+
+**Health Briefing**
+
+The health sector is seeing advancements in antibiotic development, with new treatments approved for complex urinary tract infections and guidelines being developed for gonorrhea. Privacy concerns are rising regarding access to medical records, particularly in the context of research on vaccine-autism links. Furthermore, discussions around physician compensation reveal higher pay and a greater sense of fairness in 2025 compared to the previous year.
+
+**Finance Briefing**
+
+In finance, leaders are expanding their roles beyond traditional accounting, leveraging technology for strategic decision-making and cost optimization. The market is experiencing significant activity, with major IPOs on the horizon and volatility influenced by geopolitical events and inflation concerns. Investors are also navigating a complex economic landscape with interest rate decisions from central banks playing a crucial role.Here's a daily executive briefing for June 4, 2026:
+
+**Tech:** Artificial Intelligence remains a pivotal trend, with a growing emphasis on AI-native development platforms and supercomputing infrastructure. Europe is actively pursuing technological sovereignty, aiming to foster its own AI industry to compete globally. Concurrently, cybersecurity measures are being bolstered, with governments implementing executive orders to test and secure AI models.
+
+**Health:** The healthcare industry is witnessing new antibiotic approvals for complex infections, while guidelines for gonorrhea treatments are under development. Privacy concerns are emerging regarding access to U.S. medical records for research purposes, particularly concerning vaccine-autism links. Physician compensation saw an increase in 2025, with more doctors reporting fair pay.
+
+**Finance:** Finance leaders are increasingly adopting technology to enhance strategic decision-making and cost management, moving beyond traditional roles. The financial markets are dynamic, with significant IPOs anticipated and geopolitical events influencing commodity prices and inflation. Central bank decisions on interest rates are a key factor for investors navigating this landscape.
+HealthResearcher > Here's a concise executive briefing on recent breakthroughs in Tech, Health, and Finance:
+
+**Health:**
+*   **CRISPR Gene-Editing for Cures:** CRISPR technology is transitioning to standardized, one-time genetic cures for diseases like Sickle Cell. Practical applications include correcting mutations at their source. Timeline: Early clinical use is ongoing, with wider adoption expected over the next 5-10 years.
+*   **AI in Medical Diagnosis:** AI tools are increasingly used for early detection of conditions like cancer, strokes, and heart problems. This assists doctors, allowing more patient face-time. Timeline: Wider rollout is occurring in 2026, with broad adoption within 3 years.
+*   **Personalized Gene Therapies:** Tailored treatments based on individual DNA are moving from research to reality. AI copilots accelerate the design of these therapies. Timeline: Early clinical use is happening now, with further progress expected in 2026.
+
+**Technology:**
+*   **Generative AI Expansion:** Generative AI is rapidly integrating into various sectors, moving beyond content creation to aiding drug discovery, improving autonomous vehicle decision-making, and revolutionizing virtual workplace development. Timeline: Active enterprise deployment is happening now, with broad adoption within 3-5 years.
+*   **Brain-Computer Interfaces (BCI):** BCIs offer direct neural pathways to external devices, with current clinical deployment for paralysis and neurological conditions. Timeline: Medical applications are expanding now, with broader non-medical use expected in 10-15 years.
+*   **Advanced Robotics:** Robotics, enhanced by AI, is becoming more precise and adaptable, assisting in healthcare, warehouses, and complex industrial processes. Timeline: Increased integration and upgrades are expected, with significant impact within 5-10 years.
+
+**Finance:**
+*   **AI-Driven Personalization:** AI is powering personalized financial advice, wealth management, fraud detection, and risk assessment, transforming the user experience. Timeline: AI market in financial services is rapidly growing, expected to double by 2029.
+*   **Embedded Finance Proliferation:** Financial services are being integrated into non-financial platforms, allowing seamless offering of banking, lending, and insurance. Projected market growth to $138 billion by 2026. Timeline: This trend is becoming mainstream now and is projected for significant growth.
+*   **Decentralized Finance (DeFi) Maturation:** DeFi is evolving into a robust ecosystem with enhanced security, scalability, and regulatory alignment, offering deeper liquidity and lower fees than traditional platforms. Timeline: Maturation and increased adoption are ongoing, with continued growth expected.
+AggregatorAgent > Here is a summary combining the provided research findings:
+
+**Executive Summary: Tech, Health, and Finance Briefing**
+
+Artificial Intelligence (AI) is the dominant force across all three sectors, driving rapid innovation and efficiency. In technology, generative and multimodal AI are being adopted for broad business applications, necessitating a focus on ethical and explainable AI development, alongside advancements in AI supercomputing and cybersecurity measures. Europe is actively pursuing technological sovereignty in AI.
+
+Health breakthroughs are heavily influenced by AI, with its application in medical diagnosis for early detection and accelerating personalized gene therapies. CRISPR gene-editing is maturing into one-time cures, while AI is also enhancing advanced robotics for healthcare applications.
+
+In finance, AI is powering personalized services, fraud detection, and strategic decision-making for leaders, with significant market growth projected. Embedded finance is becoming mainstream, and Decentralized Finance (DeFi) continues to mature. Geopolitical events and central bank decisions are key factors influencing the dynamic financial markets, alongside significant IPO activity.
+
+**Key Takeaways:**
+
+*   **AI as an Enabler:** AI is revolutionizing efficiency, diagnosis, therapy design, financial services, and robotics across all sectors.
+*   **Focus on Trust and Security:** Ethical AI development and robust cybersecurity are paramount as AI integration deepens.
+*   **Interconnected Advancements:** Technologies like AI and robotics are synergistic, enhancing capabilities in health and finance.
+*   **Economic and Geopolitical Influence:** Market volatility and strategic national interests (e.g., technological sovereignty) are shaping the landscape.
+'''
