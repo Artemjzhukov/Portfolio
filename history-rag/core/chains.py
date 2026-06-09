@@ -36,5 +36,5 @@ def create_history_assistant():
         return_source_documents=True # Important to return source documents so that the assistant can verify its answers against the retrieved information
     )
     
-    print(" AI assistant successfully initialized!")
+    print(" AI assistant successfully initialized !") 
     return qa_chain
