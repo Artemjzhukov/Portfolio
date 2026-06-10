@@ -1,19 +1,17 @@
 import imageio.v3 as iio
 from pathlib import Path
 
-# Укажите пути к вашим фото (используйте сырые строки r"..." или двойные слеши)
+# Пути к изображениям, которые будут включены в GIF
 image_paths = [
-    r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-20.jpg",   # замените на реальный путь
-    r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-15.jpg",
-    r"C:\Users\mamon\Downloads\photo_2026-04-23_15-46-08.jpg",
-    r"C:\Users\mamon\Downloads\photo_2026-04-24_12-57-52.jpg",
-    r"C:\Users\mamon\Downloads\photo_2026-04-25_14-20-03.jpg"
+    r"C:\Users\",   # 
+    r"C:\Users\",
+    r"C:\Users\",
+    r"C:\Users\",
+    r"C:\Users\"
 ]
 
 # Папка и имя для сохранения GIF
-output_path = r"C:\Users\mamon\Downloads\output.gif"
-
-# python create_gif.py
+output_path = r"C:\Users\    \output.gif"
 
 # Настройки GIF
 duration_per_image_ms = 1000   # сколько миллисекунд показывать каждый кадр (1000 = 1 сек)
