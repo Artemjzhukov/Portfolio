@@ -1,6 +1,7 @@
 # 50 Startups
 
-Predict which companies to invest for maximizing profit
+Predict startup profit based on spending patterns and company characteristics.
+Use the predictions to identify potentially high-profit startups.
 
 **Dataset:**
 ID - startup ID  
@@ -26,7 +27,7 @@ Suggest further checks.
 
 We have comparison of two models: Linear Regression and Gradient Boosting Regressor 
 
-**Result**: The best model is **Gradient Boosting Regressor** with **R2 score = 0.972002**.
+**Result**: The best model is **Gradient Boosting Regressor** with **R2 score = 0.9397**.
 
 [Jupyter Notebook](50_startups.ipynb##Project-Conclusion)
 
@@ -43,6 +44,18 @@ Investors looking to maximize profit should prioritize companies with high R&D a
 
 ### Future work
 
-Check multicoleniarity  
-P-value  
-t-test
+- Analyze multicollinearity using VIF
+- Perform statistical significance testing
+- Investigate feature importance in greater detail
+- Evaluate additional ensemble models
+- Apply cross-validation for more robust performance estimates
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run
+
+Open `50_startups.ipynb` and run all cells.
