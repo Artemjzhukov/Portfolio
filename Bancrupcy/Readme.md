@@ -41,3 +41,13 @@ We benchmarked three different approaches to dimensionality reduction:
 1.  **Quality over Quantity:** Reducing the dataset from 95 to 30 features drastically improved model stability and performance.
 2.  **Top Predictors:** The analysis highlighted **Net Income to Total Assets**, **Debt Ratio**, and **Net Worth/Assets** as the most critical indicators of solvency.
 3.  **Recommendation:** The **CatBoost** model is recommended for deployment due to its superior ability to rank risky companies (highest ROC-AUC) while remaining computationally efficient.
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run
+
+Open `Bancrupcy_features_selection.ipynb` and run all cells.
