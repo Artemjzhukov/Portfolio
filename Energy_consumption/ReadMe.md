@@ -47,3 +47,13 @@ The model demonstrated strong performance on the test set:
 
 **To do**  
 Seasonality Insight
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run
+
+Open `Energy_consumption.ipynb` and run all cells.
