@@ -50,3 +50,32 @@ GB usually beats RF on tabular data, but watch for over-fit; use **validation_fr
 ------------------------------------------------
 
 #### Once I find data about Georgian wines, I'll be able to taste them myself!
+
+## Installation
+
+```bash
+python -m venv .venv
+```
+
+or MacOS
+```bash
+python3 -m venv .venv
+```
+
+```bash
+.venv\Scripts\activate
+```
+
+or MacOS
+```bash
+source .venv/bin/activate
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run
+
+Open `Classification_Portuguese_Wines.ipynb` and run all cells.
+It is not fast story!
