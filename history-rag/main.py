@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, star(BASE_DIR))
+    
 from core.chains import create_history_assistant
 
 def main():

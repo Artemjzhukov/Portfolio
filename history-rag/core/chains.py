@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
 from langchain_community.llms import Ollama
-from langchain.chains import RetrievalQA
+from langchain.chains 
+from langchain_core.prompts import ChatPromptTemplate
 from core.database import get_vector_store
 
 # load environment variables from .env file (like OLLAMA_URL)
@@ -29,12 +30,7 @@ def create_history_assistant():
     
     # 3. create the final RAG chain
     print("Creating the LangChain for retrieval and verification...")
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff", # Basic chain type that simply stuffs all retrieved documents into the prompt. For more complex logic, you can explore other chain types.
-        retriever=retriever,
-        return_source_documents=True # Important to return source documents so that the assistant can verify its answers against the retrieved information
-    )
-    
+    question_answer_chain = create_history_assistant
+
     print(" AI assistant successfully initialized !") 
     return qa_chain
