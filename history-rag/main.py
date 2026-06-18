@@ -3,7 +3,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, star(BASE_DIR))
+    sys.path.insert(0, str(BASE_DIR))
     
 from core.chains import create_history_assistant
 
@@ -19,9 +19,12 @@ def main():
         print("Code must be adjusted for different environments.\n")
         
         # Example of how we will make requests to our bot/assistant:
-        # query = "Какие тесты у меня есть по Александру II?"
-        # result = assistant({"query": query})
-        # print("Ответ:", result["result"])
+        query = "Какие тесты у меня есть по Александру II?"
+        print(f"\Send '{query}' to Llama")
+        result = assistant.invoke(query)
+        print("\----------Answer Llama------")
+        print(result)
+        print("\---------------------")
         
     except Exception as e:
         print(f"\n Error during startup: {e}")
