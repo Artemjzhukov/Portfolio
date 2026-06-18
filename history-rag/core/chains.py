@@ -1,36 +1,58 @@
 import os
 from dotenv import load_dotenv
-from langchain_community.llms import Ollama
-from langchain.chains 
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
-from core.database import get_vector_store
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+from langchain_qdrant import QdrantVectorStore
+from core.database import get_vector_store   # предполагается, что она возвращает QdrantVectorStore
 
-# load environment variables from .env file (like OLLAMA_URL)
 load_dotenv()
-
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 
+def format_docs(docs):
+    """Объединяет документы в один текст для контекста."""
+    return "\n\n".join(doc.page_content for doc in docs)
+
 def create_history_assistant():
-    """Function to create and initialize the AI assistant chain."""
     print("Initializing the AI assistant model...")
     
-    # 1. Connect to Ollama (which will be running on the Mac)
-    llm = Ollama(
+    # 1. Инициализируем LLM (через Ollama)
+    llm = ChatOllama(
         base_url=OLLAMA_URL,
         model="llama3:8b",
-        temperature=0.3 # Lower temperature means more focused and deterministic answers, which is good for fact-based Q&A
+        temperature=0.3
     )
     
-    # 2. retrieve the vector store (which contains the indexed documents from your history)
-    vector_store = get_vector_store()
-    
-    # transform the vector store into a retriever, which will be used to find relevant documents based on the user's question
-    # search_kwargs={"k": 3} means that the system will find the 3 most similar documents
+    # 2. Получаем векторное хранилище и создаём ретривер
+    vector_store = get_vector_store()   # предположим, что эта функция возвращает QdrantVectorStore
     retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     
-    # 3. create the final RAG chain
-    print("Creating the LangChain for retrieval and verification...")
-    question_answer_chain = create_history_assistant
-
-    print(" AI assistant successfully initialized !") 
-    return qa_chain
+    # 3. Промпт (система + вопрос пользователя)
+    system_prompt = (
+        "Вы являетесь профессиональным ассистентом по истории и обществознанию.\n"
+        "Используйте предоставленный контекст, чтобы ответить на вопрос.\n"
+        "Если вы не знаете ответа, честно скажите, что ответа нет в материалах.\n\n"
+        "Контекст:\n{context}"
+    )
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{input}"),
+    ])
+    
+    # 4. Строим RAG-цепочку с помощью LCEL (современный подход)
+    print("Creating the LangChain retrieval chain (LCEL)...")
+    
+    rag_chain = (
+        {
+            "context": retriever | format_docs,   # сначала поиск, потом форматирование
+            "input": RunnablePassthrough()        # передаём вопрос пользователя без изменений
+        }
+        | prompt                                  # формируем сообщения
+        | llm                                     # вызываем модель
+        | StrOutputParser()                       # извлекаем текст из ответа
+    )
+    
+    print("AI assistant successfully initialized!")
+    return rag_chain
