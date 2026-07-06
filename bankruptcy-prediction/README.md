@@ -53,7 +53,9 @@ pip install -r requirements.txt
 Open `Bancrupcy_features_selection.ipynb` and run all cells.
 
 Next:
-Grid (scoring='average_precision'
-      'scale_pos_weight': [5, 10, 20] OR 'auto_class_weights': ['Balanced']
-      'border_count': [128, 254] ??)
-CatBoost (eval_metric='PRAUC')
+Grid (scoring='average_precision'  
+      'scale_pos_weight': [5, 10, 20] OR 'auto_class_weights': ['Balanced']  
+      'border_count': [128, 254] ??)  
+CatBoost (eval_metric='PRAUC')  
+Delete iteration=2000
+
