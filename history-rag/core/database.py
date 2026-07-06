@@ -161,7 +161,11 @@ def add_documents_to_store(raw_documents: List[dict]) -> None:
     lc_documents = [
         Document(
             page_content=doc.content,
-            metadata={"source": doc.source, "topic": doc.topic, "date": doc.doc_date},
+            metadata={
+                "source": doc.source, 
+                "topic": doc.topic, 
+                "date": doc.doc_date},
+                "images": [],
         )
         for doc in validated
     ]
