@@ -15,16 +15,16 @@ def main():
         assistant = create_history_assistant()
         
         print("\nSystem initialized.")
-        print("Coution: on another machine it may not work.")
+        print("Caution: on another machine it may not work.")
         print("Code must be adjusted for different environments.\n")
         
         # Example of how we will make requests to our bot/assistant:
         query = "Какие тесты у меня есть по Александру II?"
-        print(f"\Send '{query}' to Llama")
+        print(f"Send '{query}' to Llama")
         result = assistant.invoke(query)
-        print("\----------Answer Llama------")
+        print("----------Answer Llama------")
         print(result)
-        print("\---------------------")
+        print("---------------------")
         
     except Exception as e:
         print(f"\n Error during startup: {e}")
