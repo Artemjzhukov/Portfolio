@@ -19,9 +19,12 @@ def main():
         print("Code must be adjusted for different environments.\n")
         
         # Example of how we will make requests to our bot/assistant:
-        # query = "Какие тесты у меня есть по Александру II?"
-        # result = assistant({"query": query})
-        # print("Ответ:", result["result"])
+        query = "Какие тесты у меня есть по Александру II?"
+        print(f"\Send '{query}' to Llama")
+        result = assistant.invoke(query)
+        print("\----------Answer Llama------")
+        print(result)
+        print("\---------------------")
         
     except Exception as e:
         print(f"\n Error during startup: {e}")
