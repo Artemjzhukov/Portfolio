@@ -13,11 +13,6 @@ In progress. Current corpus: 5000 documents, 15000 pages, Russian.
 - **Hallucination mitigation**: strict context-grounded system prompt + 
   source citation return.
 
-## Known Limitations / Next Steps
-- BM25 + dense retrieval — planned to improve exact-match recall for names/dates.
-- planned: RAGAS
-- Reindexing currently full-batch; incremental upsert planned as corpus grows.
-
 ## Why fully local
 Source materials are privacy-sensitive (tutor-owned historical archives); 
 zero external API calls is a hard requirement, not a default preference.
@@ -32,4 +27,8 @@ zero external API calls is a hard requirement, not a default preference.
   but hasn't been tested end-to-end on a genuinely separate client/server setup.  
 - **Retrieval**: dense-only (top-k=3), no hybrid/BM25, no reranking, no similarity-score threshold — low-relevance results are currently filtered  
   only via the system prompt, not programmatically.  
-- **No conversation memory** — each query is stateless.  
+- **No conversation memory** — each query is stateless.
+
+    
+- planned: RAGAS
+- Reindexing currently full-batch; incremental upsert planned as corpus grows.
