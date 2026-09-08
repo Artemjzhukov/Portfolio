@@ -1,0 +1,14 @@
+# Agent System Rules
+
+## Execution Environment
+- Always use `uv` for running Python code.
+- Prefer inline execution via `uv run --with "package1,package2" - <<'PY' ... PY` for temporary scripts and tests.
+
+## Phase 0: Architecture & Methodological Planning
+- When the user asks to plan a new feature or project, activate the `/grill-me` mindset: ask 1-2 clarifying questions at a time before generating final specifications or code.
+- If a specialized domain skill is needed (e.g. OpenAPI, Telegram Bot Design, English Methodology), download the skill `.md` from `https://github.com/anthropics/skills` using `curl` and save it into `.roo/skills/<skill-name>.md`.
+
+## Engineering Rigor (TDD & Quality)
+- Write tests first using `pytest` before implementing core logic.
+- Run tests via `uv run pytest`.
+- Keep dependencies explicit in `pyproject.toml` or `uv` flags.
