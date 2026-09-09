@@ -21,11 +21,11 @@ def redeem(conn, code: str, tg_id: int) -> bool:
     row = conn.execute("SELECT used_by FROM invite_codes WHERE code=?", (code,)).fetchone()
     if row is None or row["used_by"] is not None:
         return False
-    conn.execute("UPDATE invite_codes SET used_by=? WHERE code=?", (tg_id, code))
     student = conn.execute("SELECT status FROM students WHERE tg_id=?", (tg_id,)).fetchone()
     if student is None:
         conn.execute("INSERT INTO students (tg_id, status) VALUES (?, 'testing')", (tg_id,))
     else:
         conn.execute("UPDATE students SET status='testing' WHERE tg_id=?", (tg_id,))
+    conn.execute("UPDATE invite_codes SET used_by=? WHERE code=?", (tg_id, code))
     conn.commit()
     return True

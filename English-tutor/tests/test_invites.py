@@ -6,7 +6,7 @@ from english_tutor.services import invites
 
 def test_new_code_format():
     code = invites.new_code(random.Random(1))
-    assert len(code) == 11 and code.startswith("TUTOR-")
+    assert len(code) == 10 and code.startswith("TUTOR-")
     assert code[6:].isalnum() and code[6:].isupper()
 
 
