@@ -19,7 +19,7 @@ ADMIN, STRANGER = 99, 7
 
 async def test_invite_rejected_for_non_admin(conn):
     msg = FakeMsg("/invite", STRANGER)
-    await admin_handlers.invite(msg, conn)
+    await admin_handlers.invite(msg, conn, admin_id=ADMIN)
     assert "админ" in msg.sent[0].lower()
     assert conn.execute("SELECT COUNT(*) c FROM invite_codes").fetchone()["c"] == 0
 
