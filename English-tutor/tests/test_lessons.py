@@ -56,6 +56,10 @@ def test_get_or_create_generates_then_caches(conn, llm):
 
 
 def test_theme_lessons_cached_per_student(conn, llm):
+    from english_tutor import db
+
+    db.upsert_student(conn, 1)
+    db.upsert_student(conn, 2)
     lessons.get_or_create_lesson(conn, llm, level="B1", topic="cooking", kind="theme", student_id=1)
     lessons.get_or_create_lesson(conn, llm, level="B1", topic="cooking", kind="theme", student_id=2)
     assert llm.calls == 2
