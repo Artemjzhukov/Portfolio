@@ -78,7 +78,7 @@ async def handle_voice_test(message, state: FSMContext, conn, llm, admin_id, bot
     from english_tutor.handlers.voice import save_and_transcribe
     from english_tutor.services import limits
 
-    err = limits.check_voice(message.voice)
+    err = limits.check_voice(getattr(message, "voice", None))
     if err:
         await message.answer(err)
         return

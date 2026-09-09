@@ -115,7 +115,7 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
 async def drill_flow(message, state: FSMContext, conn, llm):
     from english_tutor.handlers.voice import save_and_transcribe
 
-    err = limits.check_voice(message.voice)
+    err = limits.check_voice(getattr(message, "voice", None))
     if err:
         await message.answer(err)
         return
