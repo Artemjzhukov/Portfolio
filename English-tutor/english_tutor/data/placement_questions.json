@@ -1,0 +1,22 @@
+[
+ {"q": "She ___ to school every day.", "options": ["go", "goes", "going", "gone"], "answer": 1, "level": "A2"},
+ {"q": "Look! The children ___ in the park.", "options": ["play", "plays", "are playing", "played"], "answer": 2, "level": "A2"},
+ {"q": "I ___ my keys yesterday.", "options": ["lose", "lost", "losed", "losing"], "answer": 1, "level": "A2"},
+ {"q": "There ___ some milk in the fridge.", "options": ["is", "are", "be", "been"], "answer": 0, "level": "A2"},
+ {"q": "___ apple a day keeps the doctor away.", "options": ["A", "An", "The", "-"], "answer": 1, "level": "A2"},
+ {"q": "We ___ visit grandma on Sundays.", "options": ["usually", "usually are", "are usually", "usual"], "answer": 0, "level": "A2"},
+ {"q": "I'm taller ___ my brother.", "options": ["then", "than", "as", "that"], "answer": 1, "level": "A2"},
+ {"q": "This is ___ book I have.", "options": ["the most good", "the best", "best", "more good"], "answer": 1, "level": "A2"},
+ {"q": "How ___ water do you drink?", "options": ["many", "much", "lot", "some"], "answer": 1, "level": "A2"},
+ {"q": "Can you ___ me?", "options": ["to help", "helping", "help", "helped"], "answer": 2, "level": "A2"},
+ {"q": "Tomorrow I ___ my aunt.", "options": ["will visit", "visit", "will visiting", "visited"], "answer": 0, "level": "A2"},
+ {"q": "I ___ never ___ to London.", "options": ["have been", "has been", "am been", "was been"], "answer": 0, "level": "B1"},
+ {"q": "She ___ here since 2019.", "options": ["works", "has been working", "worked", "is working"], "answer": 1, "level": "B1"},
+ {"q": "While I ___ TV, the phone rang.", "options": ["watched", "was watching", "watch", "am watching"], "answer": 1, "level": "B1"},
+ {"q": "If it rains, we ___ at home.", "options": ["stay", "will stay", "would stay", "stayed"], "answer": 1, "level": "B1"},
+ {"q": "The car ___ in Germany.", "options": ["made", "was made", "is making", "makes"], "answer": 1, "level": "B1"},
+ {"q": "He said he ___ finished the report.", "options": ["has", "had", "have", "having"], "answer": 1, "level": "B2"},
+ {"q": "If I ___ more time, I would travel the world.", "options": ["have", "had", "would have", "having"], "answer": 1, "level": "B2"},
+ {"q": "She ___ have missed the train - she left an hour early.", "options": ["must", "can't", "should", "wouldn't"], "answer": 1, "level": "B2"},
+ {"q": "Rarely ___ such a beautiful sunset.", "options": ["I have seen", "I saw", "have I seen", "I had seen"], "answer": 2, "level": "B2"}
+]
