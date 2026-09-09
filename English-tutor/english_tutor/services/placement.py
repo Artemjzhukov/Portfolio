@@ -18,7 +18,10 @@ def score_written(answers: list[int | None]) -> int:
 
 
 def suggest_level(score: int, voice_hint: str | None = None) -> str:
-    level = next(name for name, (lo, hi) in _BANDS.items() if lo <= score <= hi)
+    level = next(
+        (name for name, (lo, hi) in _BANDS.items() if lo <= score <= hi),
+        "A2",  # scores below the A2 band still map to A2
+    )
     if voice_hint in _LEVELS and voice_hint != level:
         d = _LEVELS.index(voice_hint) - _LEVELS.index(level)
         if abs(d) == 1:
