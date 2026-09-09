@@ -7,14 +7,24 @@ from english_tutor.services import invites
 router = Router()
 
 
+def _is_admin(message, admin_id) -> bool:
+    return getattr(message.from_user, "id", None) == admin_id
+
+
 @router.message(Command("invite"))
-async def invite(message, conn):
+async def invite(message, conn, admin_id):
+    if not _is_admin(message, admin_id):
+        await message.answer("Эта команда только для админа.")
+        return
     code = invites.create_invite(conn)
     await message.answer(f"Новый код приглашения: {code}")
 
 
 @router.message(Command("approve"))
-async def approve(message, conn):
+async def approve(message, conn, admin_id):
+    if not _is_admin(message, admin_id):
+        await message.answer("Эта команда только для админа.")
+        return
     parts = (message.text or "").split()
     if len(parts) < 2 or not parts[1].lstrip("-").isdigit():
         await message.answer("Формат: /approve <tg_id> [A2|B1|B2]")
@@ -34,7 +44,10 @@ async def approve(message, conn):
 
 
 @router.message(Command("students"))
-async def students(message, conn):
+async def students(message, conn, admin_id):
+    if not _is_admin(message, admin_id):
+        await message.answer("Эта команда только для админа.")
+        return
     rows = db.list_students(conn)
     if not rows:
         await message.answer("Пока нет студентов.")
