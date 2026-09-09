@@ -1,6 +1,6 @@
 # English Tutor Bot — Product Specification
 
-> **Stage 1 output (Grill)** — per `.clinerules`. Status: **awaiting user approval** to move to Stage 2 (Curriculum Planner).
+> **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved by owner** («Plan is Approved»).
 > Decisions locked during interview with the owner (12 questions, one branch at a time).
 
 ## 1. What we're building
@@ -66,7 +66,7 @@ A Telegram bot that tutors English for Russian speakers. It teaches grammar (B),
 - **SQLite** via stdlib `sqlite3` — no ORM, no external DB.
 - Config in `.env`: `BOT_TOKEN`, `GROQ_API_KEY`, `ADMIN_TELEGRAM_ID`, `REMINDER_TIMES`, `TZ`.
 - Run: long-lived process via `uv run`; **no Docker in v1**.
-- Models (configurable): `whisper-large-v3` (voice), `llama-3.3-70b-versatile` (all text LLM tasks). One provider — Groq for everything.
+- Models (configurable): `whisper-large-v3` (voice), `openai/gpt-oss-120b` (all text LLM tasks; updated from the original `llama-3.3-70b-versatile` after the live Groq model check on 2026-09-09). One provider — Groq for everything.
 
 ## 13. Data Model (SQLite, draft)
 - `students(tg_id, name, level, status, created_at)`

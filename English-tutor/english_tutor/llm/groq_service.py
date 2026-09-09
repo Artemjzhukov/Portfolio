@@ -6,7 +6,7 @@ class LLMParseError(Exception):
 
 
 class GroqService:
-    def __init__(self, api_key: str, model: str = "llama-3.3-70b-versatile",
+    def __init__(self, api_key: str, model: str = "openai/gpt-oss-120b",
                  whisper_model: str = "whisper-large-v3", client=None):
         self.model = model
         self.whisper_model = whisper_model

@@ -1,4 +1,4 @@
-$apiKey = "bd81fa8ed3f14db590bef62d8c3276fe.uMuMuaVh22eRXZir"
+$apiKey = ""
 $headers = @{
     "Authorization" = "Bearer $apiKey"
     "Content-Type"  = "application/json"

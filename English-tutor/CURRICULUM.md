@@ -1,7 +1,7 @@
 # English Tutor Bot — Curriculum (CEFR-Aligned Spine)
 
 > **Stage 2 output (Curriculum Planner)** — per `.clinerules` and `curriculum-planner/SKILL.md`.
-> Status: **awaiting user approval** (say «Curriculum approved» / «Move to development»).
+> Status: **✅ Approved by owner** («Curriculum approved»). Stage 3 (Development) scheduled to start next session.
 > This document is the **content spine** the bot serves (SPEC §5): 6 topics per level (A2, B1, B2), each with a goal in Russian, grammar points, drill vocabulary, a closing voice task, and chat themes. Owner-editable. The LLM generates lesson bodies from this spine at first use and caches them.
 
 ## 1. Learner Profile (generalized for the bot's audience)
@@ -195,4 +195,4 @@ Suggested level = written-score band, adjusted ±half a level by voice signals; 
 
 ---
 
-**End of curriculum.** Awaiting explicit approval per Stage rules: say **«Curriculum approved»** or **«Move to development»** to enter Stage 3 (Development with Superpowers: brainstorm → plan → TDD → implement → review).
+**End of curriculum. Approved.** Next: Stage 3 (Development with Superpowers: brainstorm → plan → TDD → implement → review), starting with Phase 1 MVP (SPEC §15).
