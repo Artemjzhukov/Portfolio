@@ -64,7 +64,7 @@ async def handle_answer(message, state: FSMContext, conn):
         if not 0 <= choice <= 3:
             raise ValueError
     except (ValueError, AttributeError):
-        await message.answer("Ответь числом 0–3:")
+        await message.answer("На этом шаге ответь числом 0–3. Голосовые принимаю только в конце теста 🎤")
         return
     answers = data["answers"] + [choice]
     qidx = data["qidx"] + 1
@@ -86,6 +86,11 @@ async def handle_voice_test(message, state: FSMContext, conn, llm, admin_id, bot
     err = limits.check_voice(getattr(message, "voice", None))
     if err:
         await message.answer(err)
+        return
+    if getattr(message, "voice", None) is None:
+        await state.update_data(last_question="🎤 Жду голосовое сообщение — расскажи о своём дне.")
+        await message.answer("Здесь я жду голосовое сообщение 🎤 Расскажи о своём дне (нажми микрофон), "
+                             "или /start чтобы начать заново.")
         return
     data = await state.get_data()
     transcript = await save_and_transcribe(message, bot, llm)

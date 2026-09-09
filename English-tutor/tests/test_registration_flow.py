@@ -147,6 +147,24 @@ class FakeLLMLections:
         return self.reply
 
 
+async def test_voice_during_mc_questions_reprompts_clearly(conn, st):
+    await _register_and_answer_early(conn, st)
+    before = st.data["qidx"]
+    msg = FakeMessage(tg_id=42, voice=type("V", (), {"duration": 10})())
+    msg.text = None
+    await registration.handle_answer(msg, st, conn)
+    assert st.data["qidx"] == before
+    assert "0–3" in msg.sent[-1] and "голос" in msg.sent[-1].lower()
+
+
+async def test_text_at_voice_step_prompts_for_voice(conn, st, llm, bot, monkeypatch):
+    await _register_and_answer(conn, st)
+    msg = FakeMessage(tg_id=42, text="hello")
+    await registration.handle_voice_test(msg, st, conn, llm, admin_id=99, bot=bot)
+    assert st.state == registration.Registration.waiting_voice  # still waiting
+    assert "голосов" in msg.sent[-1].lower()
+
+
 async def test_lesson_flow_accepts_voice_answer(conn, st, monkeypatch):
     import english_tutor.handlers.voice as voice_mod
     from english_tutor.handlers import lessons as lessons_h
