@@ -3,3 +3,8 @@
 test.py
 skills-lock.json
 .clinerules
+.env
+tutor.db
+__pycache__/
+.pyvenv/
+.env
