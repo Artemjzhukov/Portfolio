@@ -24,11 +24,13 @@ class FakeGroq:
         return self.script.pop(0)
 
 
-def test_transcribe_returns_text():
+def test_transcribe_returns_text(tmp_path):
     c = FakeGroq(api_key="k")
     s = GroqService(api_key="k", client=c)
+    audio = tmp_path / "x.ogg"
+    audio.write_bytes(b"fake")
     c.script = [type("T", (), {"text": "hello world"})()]
-    assert s.transcribe("x.ogg") == "hello world"
+    assert s.transcribe(str(audio)) == "hello world"
 
 
 def test_chat_json_parses_clean_json():
