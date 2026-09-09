@@ -120,7 +120,7 @@ async def test_voice_completes_test_and_notifies_admin(conn, st, llm, bot, monke
 
     monkeypatch.setattr(voice_mod, "save_and_transcribe", fake_transcribe)
     await _register_and_answer(conn, st)
-    msg = FakeMessage(tg_id=42)
+    msg = FakeMessage(tg_id=42, voice=type("V", (), {"duration": 10})())
     await registration.handle_voice_test(msg, st, conn, llm, admin_id=99, bot=bot)
     assert db.get_student(conn, 42)["status"] == "pending"
     row = conn.execute("SELECT * FROM test_results").fetchone()
