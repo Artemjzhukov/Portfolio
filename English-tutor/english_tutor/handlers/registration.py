@@ -76,9 +76,15 @@ async def handle_answer(message, state: FSMContext, conn):
 @router.message(Registration.waiting_voice)
 async def handle_voice_test(message, state: FSMContext, conn, llm, admin_id, bot):
     from english_tutor.handlers.voice import save_and_transcribe
+    from english_tutor.services import limits
 
+    err = limits.check_voice(message.voice)
+    if err:
+        await message.answer(err)
+        return
     data = await state.get_data()
     transcript = await save_and_transcribe(message, bot, llm)
+    limits.register_llm_call(conn, message.from_user.id)
     hint = placement.classify_voice(transcript, llm)
     score = placement.score_written(data["answers"])
     suggested = placement.suggest_level(score, hint)

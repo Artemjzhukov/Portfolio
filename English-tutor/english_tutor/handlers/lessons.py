@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
-from english_tutor.services import exercises, lessons, spine
+from english_tutor.services import exercises, lessons, limits, spine
 
 router = Router()
 
@@ -74,12 +74,26 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
     data = await state.get_data()
     student = db.get_student(conn, message.from_user.id)
     if data.get("ex_idx") is None:
+        text = (message.text or "").strip()
+        if not text.isdigit():
+            err = limits.check_theme(text) or limits.check_text(text)
+            if err:
+                await message.answer(err)
+                return
+        if not limits.can_use_llm(conn, student["tg_id"]):
+            await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
+            return
         lesson = _resolve_lesson(message, conn, llm, student)
         if lesson is None:
             await message.answer("Не получилось составить урок, попробуй другую тему.")
             return
+        limits.register_llm_call(conn, student["tg_id"])
         await message.answer(lessons.format_lesson(lesson))
         await state.update_data(lesson=lesson, ex_idx=0)
+        return
+    err = limits.check_text(message.text)
+    if err:
+        await message.answer(err)
         return
     exercise = data["lesson"]["exercises"][data["ex_idx"]]
     ok = exercises.check_answer(exercise, message.text)
@@ -101,6 +115,14 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
 async def drill_flow(message, state: FSMContext, conn, llm):
     from english_tutor.handlers.voice import save_and_transcribe
 
+    err = limits.check_voice(message.voice)
+    if err:
+        await message.answer(err)
+        return
+    if not limits.can_use_llm(conn, message.from_user.id):
+        await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
+        return
+    limits.register_llm_call(conn, message.from_user.id)
     transcript = await save_and_transcribe(message, message.bot, llm)
     await message.answer(f"📝 Расшифровка: {transcript}\n\n(Разбор ошибок появится в Phase 2)")
     await state.clear()

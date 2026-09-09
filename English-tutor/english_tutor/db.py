@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS srs_cards (
     due_date TEXT NOT NULL,
     UNIQUE(student_id, word_en)
 );
+CREATE TABLE IF NOT EXISTS daily_usage (
+    student_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    llm_calls INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (student_id, day)
+);
 """
 
 
@@ -105,3 +111,21 @@ def save_test_result(conn, student_id, written_score, voice_transcript, suggeste
         (student_id, written_score, voice_transcript, suggested_level),
     )
     conn.commit()
+
+
+def bump_usage(conn, student_id, day: str | None = None) -> int:
+    from datetime import date
+
+    day = day or str(date.today())
+    conn.execute(
+        "INSERT INTO daily_usage (student_id, day, llm_calls) VALUES (?, ?, 1) "
+        "ON CONFLICT(student_id, day) DO UPDATE SET llm_calls = llm_calls + 1",
+        (student_id, day),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT llm_calls FROM daily_usage WHERE student_id=? AND day=?",
+        (student_id, day),
+    ).fetchone()
+    return row["llm_calls"]
+
