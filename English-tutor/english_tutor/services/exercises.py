@@ -3,7 +3,9 @@ import re
 _KEEP = re.compile(r"[^\w\s']")
 
 
-def normalize(text: str) -> str:
+def normalize(text: str | None) -> str:
+    if not text:
+        return ""
     text = text.lower().strip()
     text = _KEEP.sub("", text)
     return " ".join(text.split())

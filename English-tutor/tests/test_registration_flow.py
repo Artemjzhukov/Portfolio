@@ -6,8 +6,9 @@ from english_tutor.services import invites, placement
 
 
 class FakeMessage:
-    def __init__(self, text=None, tg_id=42):
+    def __init__(self, text=None, tg_id=42, voice=None):
         self.text = text
+        self.voice = voice
         self.from_user = type("U", (), {"id": tg_id})()
         self.sent = []
 
@@ -136,3 +137,49 @@ async def test_non_numeric_answer_reprompts(conn, st):
     await registration.handle_answer(msg, st, conn)
     assert st.data["qidx"] == before
     assert "0–3" in msg.sent[-1]
+
+
+class FakeLLMLections:
+    def __init__(self, reply):
+        self.reply = reply
+
+    def chat_json(self, system, user):
+        return self.reply
+
+
+async def test_lesson_flow_accepts_voice_answer(conn, st, monkeypatch):
+    import english_tutor.handlers.voice as voice_mod
+    from english_tutor.handlers import lessons as lessons_h
+    from tests.test_lessons import RAW
+
+    db.upsert_student(conn, 42, status="active", level="A2")
+    msg = FakeMessage(tg_id=42, text="1")
+    await lessons_h.lessons_cmd(msg, st, conn)
+    await lessons_h.lesson_flow(msg, st, conn, FakeLLMLections(RAW))
+    assert any("📖" in t for t in msg.sent)
+
+    msg2 = FakeMessage(tg_id=42, voice=type("V", (), {"duration": 10})())
+    msg2.text = None
+    msg2.bot = FakeBot()
+
+    async def fake_transcribe(message, bot, llm):
+        return "Went"
+
+    monkeypatch.setattr(voice_mod, "save_and_transcribe", fake_transcribe)
+    await lessons_h.lesson_flow(msg2, st, conn, FakeLLMLections(RAW))
+    assert any("✅" in t for t in msg2.sent)
+
+
+async def test_lesson_flow_ignores_sticker(conn, st):
+    from english_tutor.handlers import lessons as lessons_h
+    from tests.test_lessons import RAW
+
+    db.upsert_student(conn, 42, status="active", level="A2")
+    msg = FakeMessage(tg_id=42, text="1")
+    await lessons_h.lessons_cmd(msg, st, conn)
+    await lessons_h.lesson_flow(msg, st, conn, FakeLLMLections(RAW))
+
+    msg2 = FakeMessage(tg_id=42)  # no text, no voice -> sticker/photo
+    msg2.text = None
+    await lessons_h.lesson_flow(msg2, st, conn, FakeLLMLections(RAW))
+    assert any("текстом или голосом" in t for t in msg2.sent)

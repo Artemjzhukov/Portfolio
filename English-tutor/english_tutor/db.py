@@ -78,10 +78,11 @@ def get_student(conn, tg_id):
 
 def upsert_student(conn, tg_id, name=None, status=None, level=None):
     conn.execute(
-        "INSERT INTO students (tg_id, name, status) VALUES (?, ?, COALESCE(?, 'new')) "
+        "INSERT INTO students (tg_id, name, status, level) "
+        "VALUES (?, ?, COALESCE(?, 'new'), ?) "
         "ON CONFLICT(tg_id) DO UPDATE SET name=COALESCE(excluded.name, name), "
-        "status=COALESCE(?, status), level=COALESCE(?, level)",
-        (tg_id, name, status, status, level),
+        "status=COALESCE(?, status), level=COALESCE(excluded.level, level)",
+        (tg_id, name, status, level, status),
     )
     conn.commit()
 

@@ -95,8 +95,25 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
     if err:
         await message.answer(err)
         return
+    answer_text = message.text
+    if answer_text is None:
+        if getattr(message, "voice", None) is not None:
+            verr = limits.check_voice(message.voice)
+            if verr:
+                await message.answer(verr)
+                return
+            if not limits.can_use_llm(conn, message.from_user.id):
+                await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
+                return
+            limits.register_llm_call(conn, message.from_user.id)
+            from english_tutor.handlers.voice import save_and_transcribe
+
+            answer_text = await save_and_transcribe(message, message.bot, llm)
+        else:
+            await message.answer("Ответь текстом или голосом 🎤")
+            return
     exercise = data["lesson"]["exercises"][data["ex_idx"]]
-    ok = exercises.check_answer(exercise, message.text)
+    ok = exercises.check_answer(exercise, answer_text)
     if ok:
         reply = "✅ Верно!"
     else:

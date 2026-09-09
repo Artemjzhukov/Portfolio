@@ -35,7 +35,8 @@ async def start(message, state: FSMContext, conn):
 
 @router.message(Registration.waiting_code)
 async def handle_code(message, state: FSMContext, conn):
-    if invites.redeem(conn, message.text, message.from_user.id):
+    code = (message.text or "").strip()
+    if code and invites.redeem(conn, code, message.from_user.id):
         await state.set_state(Registration.waiting_name)
         await message.answer("Код принят! Как тебя зовут?")
     else:
@@ -44,7 +45,11 @@ async def handle_code(message, state: FSMContext, conn):
 
 @router.message(Registration.waiting_name)
 async def handle_name(message, state: FSMContext, conn):
-    db.upsert_student(conn, message.from_user.id, name=message.text.strip(), status="testing")
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer("Напиши своё имя текстом:")
+        return
+    db.upsert_student(conn, message.from_user.id, name=name, status="testing")
     await state.update_data(qidx=0, answers=[], last_question=_question_text(0))
     await state.set_state(Registration.test_question)
     await message.answer("Начинаем тест: 20 вопросов + 1 голосовой ответ.")
