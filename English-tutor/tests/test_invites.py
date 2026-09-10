@@ -54,13 +54,15 @@ def test_redeem_rejected_for_pending_student(conn):
     assert db.get_student(conn, 42)["status"] == "pending"
 
 
-def test_redeem_atomic_race(conn):
+def test_code_preclaimed_rejected_and_status_untouched(conn):
     code = invites.create_invite(conn)
-    db.upsert_student(conn, 42)
+    db.upsert_student(conn, 42, status="new")
+    db.upsert_student(conn, 43, status="new")
     cur = conn.execute(
         "UPDATE invite_codes SET used_by=? WHERE code=? AND used_by IS NULL",
-        (999, code),
+        (43, code),
     )
     conn.commit()
     assert cur.rowcount == 1
     assert invites.redeem(conn, code, 42) is False
+    assert db.get_student(conn, 42)["status"] == "new"
