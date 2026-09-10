@@ -1,6 +1,7 @@
 # English Tutor Bot — Product Specification
 
-> **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved by owner** («Plan is Approved»).
+> **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved** («Plan is Approved»).
+> **Development status:** Phase 1 MVP **complete** — 85 tests green, live smoke test passed (2026-09-09). Phase 2 next (see §20–21).
 > Decisions locked during interview with the owner (12 questions, one branch at a time).
 
 ## 1. What we're building
@@ -113,3 +114,43 @@ Pronunciation scoring (phoneme-level) · TTS · SM-2 algorithm · multi-admin ·
 | 10 | SRS: auto-collected personal decks; 1/3/7/14/30 ladder; push + `/review` | Q10 |
 | 11 | Free-form theme lessons; chat suggests topics | Q11 |
 | 12 | Phases 1→2→3 as above; TDD with pytest | Q12 |
+
+## 20. Post-MVP Hardening Log (Phase 1 review fixes — all shipped & tested)
+
+**Access control**
+- Admin commands (`/invite`, `/approve`, `/students`) verify sender == `ADMIN_TELEGRAM_ID`; others get «Эта команда только для админа.» (was: open to anyone).
+
+**Placement (critical bugs fixed)**
+- `suggest_level` covers the full 0–20 range: **A2: 0–11, B1: 12–16, B2: 17–20** (was: scores 0–5 crashed with `StopIteration`).
+- `voice_hint` follows a strict rule: moves the result **one band only**, and **only when the written score is within 1 point of the boundary** toward the hinted band (e.g. 11+B1→B1, 12+A2→A2, 5+B1→A2, 10+B2→A2). Explicit boundary tests cover 11/12/13/16/10 cases.
+
+**Invite codes (contract fixed)**
+- `redeem` returns `True` only if the code exists, is unused, **and the student's status is `new`/missing** — an `active`/`pending`/`blocked` student can no longer redeem a code and reset their own status.
+- Atomic claim: `UPDATE invite_codes SET used_by=? WHERE code=? AND used_by IS NULL` (single-winner guarantee; on lost race the student-status change is rolled back).
+
+**Conversation robustness (live crashes fixed)**
+- Voice answers during lesson **exercises**: voice → duration/limit checks → Whisper → transcript checked as the answer (spec §8 honored).
+- Stickers/photos/other media at any step → polite re-prompt («Ответь текстом или голосом 🎤»), no `NoneType` crashes; `normalize(None)` is safe.
+- Text during `/drill` → explicit «Здесь я жду голосовое сообщение 🎤 …»; text at the final voice step → explicit prompt; voice during the 20 MC questions → «ответь числом 0–3, голосовые — в конце теста 🎤».
+- Voice message instead of invite code or name → re-prompt, no crash.
+- `upsert_student` sets `level` on **insert** too (was: only on update → students would have `level=NULL`).
+
+**Cost guards (shipped)**
+- Text ≤1000 chars, themes ≤80 chars, voice ≤120 s — all rejected **before** any LLM/ASR call.
+- Daily LLM quota: 200 calls/student/day, counted per call in SQLite (`daily_usage`), resets at midnight. All limits are constants in `services/limits.py`.
+
+**Lesson validation & LLM reality**
+- `parse_lesson` is strictly typed: non-empty strings for title/explanation/voice_task, exercises 3–5 with validated types and non-empty fields, vocab 8–12 with exact `en`/`ru` string fields (was: presence-only checks).
+- Live Groq model check on 2026-09-09: default text model is **`openai/gpt-oss-120b`** (`llama-3.3-70b-versatile` no longer exists); `whisper-large-v3` confirmed available.
+
+## 21. Open Items (known gaps → Phase 2 backlog)
+1. **Blocking LLM/ASR calls** — `GroqService` is synchronous; wrap in `asyncio.to_thread` (or `AsyncGroq`) to avoid stalling the event loop under concurrent learners.
+2. **Central error handler** — `@router.errors()`: user gets «временная проблема», full traceback goes to log (currently unhandled errors only print to console).
+3. **`/cancel`** — explicit exit from test/lesson/drill with FSM reset (currently only `/start` resets).
+4. **Message splitting** — `format_lesson` output >4096 chars would fail Telegram's limit; split into parts.
+5. **SQLite integrity** — `CHECK` constraints on `status`/`level`, partial unique indexes for lessons (NULL in UNIQUE), `ON DELETE` policy, retry on invite-code collision.
+6. **Env validation** — validate `ADMIN_TELEGRAM_ID` (integer), warn on empty; mark `REMINDER_TIMES`/`TZ` as Phase 2.
+7. **`ruff`** linter + CI step.
+8. Phase 2 features proper (SPEC §15): chat corrections JSON (with `can_use_llm` wired from day one), SRS deck + auto-collection, reminders at 13:00/19:00.
+
+**Testing state:** 85 tests green (`uv run pytest`); Phase 1 live smoke test passed by owner on own account (both roles).

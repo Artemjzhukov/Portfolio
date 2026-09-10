@@ -188,6 +188,30 @@ async def test_lesson_flow_accepts_voice_answer(conn, st, monkeypatch):
     assert any("✅" in t for t in msg2.sent)
 
 
+async def test_drill_rejects_text_and_prompts_for_voice(conn, st):
+    from english_tutor.handlers import lessons as lessons_h
+    from tests.test_lessons import RAW
+
+    db.upsert_student(conn, 42, status="active", level="A2")
+    msg = FakeMessage(tg_id=42, text="/drill")
+    await lessons_h.drill_cmd(msg, st, conn)
+    assert st.state == lessons_h.Drill.active
+
+    msg2 = FakeMessage(tg_id=42, text="hello")  # text instead of voice
+    await lessons_h.drill_flow(msg2, st, conn, FakeLLMLections(RAW))
+    assert st.state == lessons_h.Drill.active  # still waiting
+    assert any("голосов" in t.lower() for t in msg2.sent)
+
+
+async def test_lesson_flow_stops_for_blocked_student(conn, st):
+    from english_tutor.handlers import lessons as lessons_h
+
+    db.upsert_student(conn, 42, status="blocked", level="A2")
+    msg = FakeMessage(tg_id=42, text="/lessons")
+    await lessons_h.lessons_cmd(msg, st, conn)
+    assert "start" in msg.sent[-1].lower()
+
+
 async def test_lesson_flow_ignores_sticker(conn, st):
     from english_tutor.handlers import lessons as lessons_h
     from tests.test_lessons import RAW
