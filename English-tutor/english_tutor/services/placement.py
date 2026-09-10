@@ -2,7 +2,9 @@ import importlib.resources
 import json
 
 _LEVELS = ["A2", "B1", "B2"]
-_BANDS = {"A2": (6, 11), "B1": (12, 16), "B2": (17, 20)}
+# A2 band starts at 0: a learner scoring 0–5 still maps to A2 (was a gap before).
+_BANDS = {"A2": (0, 11), "B1": (12, 16), "B2": (17, 20)}
+_MAX_SCORE = 20  # == len(QUESTIONS); validated before band lookup
 
 
 def _load() -> list[dict]:
@@ -18,10 +20,11 @@ def score_written(answers: list[int | None]) -> int:
 
 
 def suggest_level(score: int, voice_hint: str | None = None) -> str:
-    level = next(
-        (name for name, (lo, hi) in _BANDS.items() if lo <= score <= hi),
-        "A2",  # scores below the A2 band still map to A2
-    )
+    if not isinstance(score, int) or isinstance(score, bool):
+        raise ValueError(f"score must be an integer, got {score!r}")
+    if not 0 <= score <= _MAX_SCORE:
+        raise ValueError(f"score must be in 0..{_MAX_SCORE}, got {score}")
+    level = next(name for name, (lo, hi) in _BANDS.items() if lo <= score <= hi)
     if voice_hint in _LEVELS and voice_hint != level:
         d = _LEVELS.index(voice_hint) - _LEVELS.index(level)
         if abs(d) == 1:

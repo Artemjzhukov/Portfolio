@@ -26,6 +26,26 @@ def test_suggest_level_bands():
     assert placement.suggest_level(17) == "B2" and placement.suggest_level(20) == "B2"
 
 
+def test_suggest_level_all_low_scores_map_to_a2():
+    for score in range(0, 6):  # 0–5 were outside the old A2 band
+        assert placement.suggest_level(score) == "A2"
+
+
+def test_suggest_level_rejects_scores_below_zero():
+    with pytest.raises(ValueError, match=r"0\.\.20"):
+        placement.suggest_level(-1)
+
+
+def test_suggest_level_rejects_scores_above_max():
+    with pytest.raises(ValueError, match=r"0\.\.20"):
+        placement.suggest_level(21)
+
+
+def test_suggest_level_rejects_non_integer_score():
+    with pytest.raises(ValueError):
+        placement.suggest_level("12")
+
+
 def test_voice_hint_moves_one_band_near_boundary():
     assert placement.suggest_level(11, "B1") == "B1"
     assert placement.suggest_level(12, "A2") == "A2"
