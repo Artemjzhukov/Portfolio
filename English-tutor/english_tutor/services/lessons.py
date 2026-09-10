@@ -11,17 +11,36 @@ _EXERCISE_KEYS = {"type", "prompt", "answer", "hint_ru"}
 
 
 def parse_lesson(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raise LessonFormatError("lesson must be a JSON object")
     for key in ("title", "explanation_ru", "exercises", "voice_task", "vocab"):
         if key not in raw:
             raise LessonFormatError(f"missing key: {key}")
-    if not 3 <= len(raw["exercises"]) <= 5:
-        raise LessonFormatError("exercises must be 3-5 items")
-    for ex in raw["exercises"]:
-        if not _EXERCISE_KEYS <= set(ex) or ex["type"] not in {"fill_in", "translate"}:
-            raise LessonFormatError(f"bad exercise: {ex}")
-    for word in raw["vocab"]:
-        if "en" not in word or "ru" not in word:
+    if not isinstance(raw["title"], str) or not raw["title"].strip():
+        raise LessonFormatError("title must be a non-empty string")
+    if not isinstance(raw["explanation_ru"], str) or not raw["explanation_ru"].strip():
+        raise LessonFormatError("explanation_ru must be a non-empty string")
+    if not isinstance(raw["voice_task"], str) or not raw["voice_task"].strip():
+        raise LessonFormatError("voice_task must be a non-empty string")
+    exercises = raw["exercises"]
+    if not isinstance(exercises, list) or not 3 <= len(exercises) <= 5:
+        raise LessonFormatError("exercises must be a list of 3-5 items")
+    for ex in exercises:
+        if not isinstance(ex, dict) or not _EXERCISE_KEYS <= set(ex):
+            raise LessonFormatError(f"bad exercise keys: {ex}")
+        if ex["type"] not in {"fill_in", "translate"}:
+            raise LessonFormatError(f"bad exercise type: {ex['type']}")
+        for k in ("prompt", "answer", "hint_ru"):
+            if not isinstance(ex[k], str) or not ex[k].strip():
+                raise LessonFormatError(f"exercise.{k} must be a non-empty string")
+    vocab = raw["vocab"]
+    if not isinstance(vocab, list) or not 8 <= len(vocab) <= 12:
+        raise LessonFormatError("vocab must be a list of 8-12 items")
+    for word in vocab:
+        if not isinstance(word, dict) or set(word) != {"en", "ru"}:
             raise LessonFormatError(f"bad vocab entry: {word}")
+        if not all(isinstance(v, str) and v.strip() for v in word.values()):
+            raise LessonFormatError(f"bad vocab entry values: {word}")
     return raw
 
 

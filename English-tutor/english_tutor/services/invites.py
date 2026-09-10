@@ -22,10 +22,19 @@ def redeem(conn, code: str, tg_id: int) -> bool:
     if row is None or row["used_by"] is not None:
         return False
     student = conn.execute("SELECT status FROM students WHERE tg_id=?", (tg_id,)).fetchone()
+    if student is not None and student["status"] != "new":
+        return False
     if student is None:
         conn.execute("INSERT INTO students (tg_id, status) VALUES (?, 'testing')", (tg_id,))
     else:
         conn.execute("UPDATE students SET status='testing' WHERE tg_id=?", (tg_id,))
-    conn.execute("UPDATE invite_codes SET used_by=? WHERE code=?", (tg_id, code))
+    # atomic claim: only one caller can mark an unused code as used
+    cur = conn.execute(
+        "UPDATE invite_codes SET used_by=? WHERE code=? AND used_by IS NULL",
+        (tg_id, code),
+    )
+    if cur.rowcount != 1:
+        conn.rollback()  # lost the race — undo the student status change
+        return False
     conn.commit()
     return True

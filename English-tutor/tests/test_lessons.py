@@ -14,7 +14,7 @@ RAW = {
          "accept": [], "hint_ru": "правильный глагол"},
     ],
     "voice_task": "Расскажи, что ты делал(а) вчера",
-    "vocab": [{"en": "yesterday", "ru": "вчера"}, {"en": "ago", "ru": "тому назад"}],
+    "vocab": [{"en": f"word{i}", "ru": f"слово{i}"} for i in range(1, 9)],
 }
 
 
@@ -65,6 +65,29 @@ def test_theme_lessons_cached_per_student(conn, llm):
     assert llm.calls == 2
 
 
+def test_parse_lesson_rejects_wrong_vocab_length():
+    bad = {**RAW, "vocab": RAW["vocab"][:1]}
+    with pytest.raises(lessons.LessonFormatError):
+        lessons.parse_lesson(bad)
+
+
+def test_parse_lesson_rejects_wrong_types():
+    bad = {**RAW, "title": 123}
+    with pytest.raises(lessons.LessonFormatError):
+        lessons.parse_lesson(bad)
+    bad2 = {**RAW, "exercises": [{**RAW["exercises"][0], "answer": 5}]}
+    with pytest.raises(lessons.LessonFormatError):
+        lessons.parse_lesson(bad2)
+
+
+def test_parse_lesson_rejects_too_many_exercises():
+    bad = {**RAW, "exercises": [RAW["exercises"][0]] * 6}
+    with pytest.raises(lessons.LessonFormatError):
+        lessons.parse_lesson(bad)
+
+
 def test_build_prompt_uses_prompts_module():
+    system, user = lessons.build_prompt("B2", "Reported speech")
+    assert "STRICT JSON" in system and "B2" in user and "Reported speech" in user
     system, user = lessons.build_prompt("B2", "Reported speech")
     assert "STRICT JSON" in system and "B2" in user and "Reported speech" in user
