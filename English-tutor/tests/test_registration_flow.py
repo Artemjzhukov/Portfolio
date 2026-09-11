@@ -57,6 +57,9 @@ def llm():
         def chat_json(self, system, user):
             return {"level": "A2"}
 
+        async def chat_json_async(self, system, user):
+            return {"level": "A2"}
+
     return L()
 
 
@@ -66,7 +69,7 @@ async def _register_and_answer(conn, st):
     await registration.handle_code(FakeMessage(text=code), st, conn)
     await registration.handle_name(FakeMessage(text="Olya"), st, conn)
     for _ in range(20):
-        await registration.handle_answer(FakeMessage(text="0"), st, conn)
+        await registration.handle_answer(FakeMessage(text="1"), st, conn)
 
 
 async def test_start_without_code_asks_for_code(conn, st):
@@ -136,7 +139,7 @@ async def test_non_numeric_answer_reprompts(conn, st):
     msg = FakeMessage(text="hello")
     await registration.handle_answer(msg, st, conn)
     assert st.data["qidx"] == before
-    assert "0–3" in msg.sent[-1]
+    assert "1–4" in msg.sent[-1]
 
 
 class FakeLLMLections:
@@ -154,7 +157,7 @@ async def test_voice_during_mc_questions_reprompts_clearly(conn, st):
     msg.text = None
     await registration.handle_answer(msg, st, conn)
     assert st.data["qidx"] == before
-    assert "0–3" in msg.sent[-1] and "голос" in msg.sent[-1].lower()
+    assert "1–4" in msg.sent[-1] and "голос" in msg.sent[-1].lower()
 
 
 async def test_text_at_voice_step_prompts_for_voice(conn, st, llm, bot, monkeypatch):

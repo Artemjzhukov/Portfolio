@@ -4,8 +4,9 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS students (
     tg_id INTEGER PRIMARY KEY,
     name TEXT,
-    status TEXT NOT NULL DEFAULT 'new',
-    level TEXT,
+    status TEXT NOT NULL DEFAULT 'new'
+        CHECK (status IN ('new', 'testing', 'pending', 'active', 'blocked')),
+    level TEXT CHECK (level IS NULL OR level IN ('A2', 'B1', 'B2')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS invite_codes (
@@ -27,9 +28,12 @@ CREATE TABLE IF NOT EXISTS lessons (
     topic TEXT NOT NULL,
     student_id INTEGER REFERENCES students(tg_id),
     content_json TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(kind, level, topic, student_id)
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lessons_shared
+    ON lessons (kind, level, topic) WHERE student_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lessons_personal
+    ON lessons (kind, level, topic, student_id) WHERE student_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS lesson_progress (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES students(tg_id),
@@ -37,6 +41,7 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
     status TEXT NOT NULL DEFAULT 'in_progress',
     score INTEGER
 );
+-- deferred to Phase 2: lesson_progress is not written yet (owner decision K2).
 CREATE TABLE IF NOT EXISTS corrections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES students(tg_id),

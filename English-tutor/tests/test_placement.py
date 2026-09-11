@@ -55,25 +55,25 @@ def test_voice_hint_moves_one_band_near_boundary():
     assert placement.suggest_level(14, None) == "B1"
 
 
-def test_classify_voice():
+async def test_classify_voice():
     class L:
-        def chat_json(self, system, user):
+        async def chat_json_async(self, system, user):
             return {"level": "A2"}
 
-    assert placement.classify_voice("I go work every day", L()) == "A2"
+    assert await placement.classify_voice_async("I go work every day", L()) == "A2"
 
 
-def test_classify_voice_invalid_level_returns_none():
+async def test_classify_voice_invalid_level_returns_none():
     class L:
-        def chat_json(self, system, user):
+        async def chat_json_async(self, system, user):
             return {"level": "C1"}
 
-    assert placement.classify_voice("hi", L()) is None
+    assert await placement.classify_voice_async("hi", L()) is None
 
 
-def test_classify_voice_llm_error_returns_none():
+async def test_classify_voice_llm_error_returns_none():
     class L:
-        def chat_json(self, system, user):
+        async def chat_json_async(self, system, user):
             raise RuntimeError("boom")
 
-    assert placement.classify_voice("hi", L()) is None
+    assert await placement.classify_voice_async("hi", L()) is None

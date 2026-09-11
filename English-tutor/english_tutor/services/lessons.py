@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from english_tutor.llm.prompts import LESSON_SYSTEM_PROMPT, build_lesson_user_prompt
@@ -93,4 +94,20 @@ DRILL_PROMPTS = [
 
 
 def format_drill_prompt(topic: str) -> str:
-    return f"🎤 Speaking drill: {topic}"
+    return f"🎤 Задание на говорение: {topic}"
+
+
+async def get_or_create_lesson_async(conn, llm, *, level: str, topic: str, kind: str,
+                                     student_id: int | None = None) -> dict:
+    cached = _cached(conn, level, topic, kind, student_id)
+    if cached is not None:
+        return cached
+    system, user = build_prompt(level, topic)
+    # DB access stays on the main thread; only the LLM call may leave it
+    if hasattr(llm, "chat_json_async"):
+        raw = await llm.chat_json_async(system, user)
+    else:
+        raw = await asyncio.to_thread(llm.chat_json, system, user)
+    lesson = parse_lesson(raw)
+    _store(conn, level, topic, kind, student_id, lesson)
+    return lesson

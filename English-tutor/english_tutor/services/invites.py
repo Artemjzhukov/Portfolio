@@ -1,7 +1,9 @@
 import random
+import sqlite3
 import string
 
 _ALPHABET = string.ascii_uppercase + string.digits
+_MAX_CODE_ATTEMPTS = 5
 
 
 def new_code(rng: random.Random | None = None) -> str:
@@ -10,10 +12,16 @@ def new_code(rng: random.Random | None = None) -> str:
 
 
 def create_invite(conn, rng: random.Random | None = None) -> str:
-    code = new_code(rng)
-    conn.execute("INSERT INTO invite_codes (code) VALUES (?)", (code,))
-    conn.commit()
-    return code
+    # retry on the (rare) primary-key collision of the 4-char code space
+    for _attempt in range(_MAX_CODE_ATTEMPTS):
+        code = new_code(rng)
+        try:
+            conn.execute("INSERT INTO invite_codes (code) VALUES (?)", (code,))
+        except sqlite3.IntegrityError:
+            continue
+        conn.commit()
+        return code
+    raise RuntimeError("could not generate a unique invite code")
 
 
 def redeem(conn, code: str, tg_id: int) -> bool:

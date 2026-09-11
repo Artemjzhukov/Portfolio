@@ -3,6 +3,7 @@ from aiogram.filters import Command
 
 from english_tutor import db
 from english_tutor.services import invites
+from english_tutor.utils.telegram import split_for_telegram
 
 router = Router()
 
@@ -54,4 +55,5 @@ async def students(message, conn, admin_id):
         return
     lines = [f"{r['tg_id']} — {r['name'] or '—'} — {r['status']} — {r['level'] or '—'}"
              for r in rows]
-    await message.answer("\n".join(lines))
+    for part in split_for_telegram("\n".join(lines)):
+        await message.answer(part)

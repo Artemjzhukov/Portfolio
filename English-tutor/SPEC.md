@@ -143,14 +143,18 @@ Pronunciation scoring (phoneme-level) · TTS · SM-2 algorithm · multi-admin ·
 - `parse_lesson` is strictly typed: non-empty strings for title/explanation/voice_task, exercises 3–5 with validated types and non-empty fields, vocab 8–12 with exact `en`/`ru` string fields (was: presence-only checks).
 - Live Groq model check on 2026-09-09: default text model is **`openai/gpt-oss-120b`** (`llama-3.3-70b-versatile` no longer exists); `whisper-large-v3` confirmed available.
 
-## 21. Open Items (known gaps → Phase 2 backlog)
-1. **Blocking LLM/ASR calls** — `GroqService` is synchronous; wrap in `asyncio.to_thread` (or `AsyncGroq`) to avoid stalling the event loop under concurrent learners.
-2. **Central error handler** — `@router.errors()`: user gets «временная проблема», full traceback goes to log (currently unhandled errors only print to console).
-3. **`/cancel`** — explicit exit from test/lesson/drill with FSM reset (currently only `/start` resets).
-4. **Message splitting** — `format_lesson` output >4096 chars would fail Telegram's limit; split into parts.
-5. **SQLite integrity** — `CHECK` constraints on `status`/`level`, partial unique indexes for lessons (NULL in UNIQUE), `ON DELETE` policy, retry on invite-code collision.
-6. **Env validation** — validate `ADMIN_TELEGRAM_ID` (integer), warn on empty; mark `REMINDER_TIMES`/`TZ` as Phase 2.
-7. **`ruff`** linter + CI step.
-8. Phase 2 features proper (SPEC §15): chat corrections JSON (with `can_use_llm` wired from day one), SRS deck + auto-collection, reminders at 13:00/19:00.
+## 21. Open Items (Phase 1 review → status after hardening batch 2026-09-10)
+1. ~~**Blocking LLM/ASR calls**~~ — ✅ DONE: `GroqService.transcribe_async`/`chat_json_async` (asyncio.to_thread); handlers await them; wall-clock concurrency test proves non-blocking.
+2. ~~**Central error handler**~~ — ✅ DONE: `handlers/errors.py` `@router.errors()` — user gets neutral Russian copy (LLM-specific vs generic), secrets (`GROQ_API_KEY`/`BOT_TOKEN`) redacted in logs, FSM state untouched.
+3. ~~**`/cancel`**~~ — ✅ DONE: registered in registration + lessons routers (Command filter, works from any state incl. test/lesson/drill), FSM cleared.
+4. ~~**Message splitting**~~ — ✅ DONE: `utils/telegram.split_for_telegram(4096)`; lesson text and admin `/students` output are chunked; no-loss tests.
+5. ~~**SQLite integrity**~~ — ✅ DONE: `CHECK` constraints on `students.status`/`level` (fresh DBs), partial unique indexes `idx_lessons_shared`/`idx_lessons_personal` replace the NULL-unsafe table UNIQUE, invite-code collision retry (5 attempts, `RuntimeError` after). NOTE for the existing `tutor.db`: CHECK constraints require a table rebuild — delete `tutor.db` (test data) or run a manual migration.
+6. ~~**Env validation**~~ — ✅ DONE: non-integer `ADMIN_TELEGRAM_ID` raises `ValueError` naming the variable and the bad value; `REMINDER_TIMES`/`TZ` marked Phase 2-reserved in config.
+7. ~~**JSON extraction**~~ — ✅ DONE: `raw_decode`-based extractor (braces inside string values are safe), retry appends a stricter "ONLY one valid JSON" instruction.
+8. ~~**Placement numbering**~~ — ✅ DONE: options shown and parsed as **1–4** («ответь числом 1–4»), internally 0-indexed.
+9. ~~**Russian-only learner copy**~~ — ✅ DONE: drill prompt «🎤 Задание на говорение: …», welcome/completion strings localized.
+10. ~~**lesson_progress (K2)**~~ — ✅ DEFERRED: marked "deferred to Phase 2" in `db.py`; K1 (progress tracking) can be built in Phase 2.
+11. **Still open:** `ruff` linter + CI step.
+12. **Next:** Phase 2 features (SPEC §15) — chat corrections JSON (`can_use_llm` wired from day one), SRS deck + auto-collection, reminders 13:00/19:00.
 
-**Testing state:** 85 tests green (`uv run pytest`); Phase 1 live smoke test passed by owner on own account (both roles).
+**Testing state:** 110 tests green (`uv run pytest`); Phase 1 live smoke passed (owner, both roles).

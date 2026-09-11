@@ -1,5 +1,5 @@
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -18,8 +18,14 @@ class Registration(StatesGroup):
 
 def _question_text(idx: int) -> str:
     q = placement.QUESTIONS[idx]
-    opts = "\n".join(f"{i}. {o}" for i, o in enumerate(q["options"]))
-    return f"Вопрос {idx + 1}/20:\n{q['q']}\n\n{opts}\n\n(ответь номером)"
+    opts = "\n".join(f"{i}. {o}" for i, o in enumerate(q["options"], 1))
+    return f"Вопрос {idx + 1}/20:\n{q['q']}\n\n{opts}\n\n(ответь числом 1–4)"
+
+
+@router.message(Command("cancel"))
+async def cancel(message, state: FSMContext):
+    await state.clear()
+    await message.answer("Отменено. /start — заново, /lessons — уроки, /drill — говорение.")
 
 
 @router.message(CommandStart())
@@ -27,7 +33,7 @@ async def start(message, state: FSMContext, conn):
     await state.clear()
     student = db.get_student(conn, message.from_user.id)
     if student and student["status"] == "active":
-        await message.answer("С возвращением! /lessons — меню уроков, /drill — speaking practice.")
+        await message.answer("С возвращением! /lessons — уроки, /drill — задание на говорение.")
         return
     await state.set_state(Registration.waiting_code)
     await message.answer("Доступ по приглашению. Введите код:")
@@ -61,12 +67,12 @@ async def handle_answer(message, state: FSMContext, conn):
     data = await state.get_data()
     try:
         choice = int(message.text.strip())
-        if not 0 <= choice <= 3:
+        if not 1 <= choice <= 4:
             raise ValueError
     except (ValueError, AttributeError):
-        await message.answer("На этом шаге ответь числом 0–3. Голосовые принимаю только в конце теста 🎤")
+        await message.answer("На этом шаге ответь числом 1–4. Голосовые принимаю только в конце теста 🎤")
         return
-    answers = data["answers"] + [choice]
+    answers = data["answers"] + [choice - 1]
     qidx = data["qidx"] + 1
     if qidx < len(placement.QUESTIONS):
         await state.update_data(qidx=qidx, answers=answers, last_question=_question_text(qidx))
@@ -95,7 +101,7 @@ async def handle_voice_test(message, state: FSMContext, conn, llm, admin_id, bot
     data = await state.get_data()
     transcript = await save_and_transcribe(message, bot, llm)
     limits.register_llm_call(conn, message.from_user.id)
-    hint = placement.classify_voice(transcript, llm)
+    hint = await placement.classify_voice_async(transcript, llm)
     score = placement.score_written(data["answers"])
     suggested = placement.suggest_level(score, hint)
     db.save_test_result(conn, message.from_user.id, score, transcript, suggested)

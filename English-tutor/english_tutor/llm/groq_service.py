@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 
@@ -26,30 +27,35 @@ class GroqService:
     def chat_json(self, system: str, user: str) -> dict:
         content = None
         for _attempt in range(2):
+            system_prompt = system
+            if _attempt == 1:
+                system_prompt = (system + "\nIMPORTANT: Reply with ONLY one valid JSON "
+                                           "object. No markdown, no commentary.")
             reply = self._client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "system", "content": system},
+                messages=[{"role": "system", "content": system_prompt},
                           {"role": "user", "content": user}],
                 temperature=0.4,
             )
             content = reply.choices[0].message.content
             try:
-                return json.loads(_extract_json(content))
-            except (ValueError, json.JSONDecodeError):
+                return _extract_json(content)
+            except ValueError:
                 continue
         raise LLMParseError(f"Could not parse JSON from LLM reply: {content[:200]!r}")
 
+    async def transcribe_async(self, audio_path: str) -> str:
+        return await asyncio.to_thread(self.transcribe, audio_path)
 
-def _extract_json(text: str) -> str:
+    async def chat_json_async(self, system: str, user: str) -> dict:
+        return await asyncio.to_thread(self.chat_json, system, user)
+
+
+def _extract_json(text: str):
     start = text.find("{")
     if start == -1:
         raise ValueError("no JSON object found")
-    depth = 0
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start:i + 1]
-    raise ValueError("no balanced JSON object found")
+    # raw_decode respects string boundaries, unlike brace counting
+    obj, _end = json.JSONDecoder().raw_decode(text[start:])
+    return obj
+

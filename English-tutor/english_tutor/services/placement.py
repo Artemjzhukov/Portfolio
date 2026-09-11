@@ -37,11 +37,11 @@ def suggest_level(score: int, voice_hint: str | None = None) -> str:
     return level
 
 
-def classify_voice(transcript: str, llm) -> str | None:
+async def classify_voice_async(transcript: str, llm) -> str | None:
     from english_tutor.llm.prompts import VOICE_LEVEL_PROMPT
 
     try:
-        raw = llm.chat_json(VOICE_LEVEL_PROMPT, transcript)
+        raw = await llm.chat_json_async(VOICE_LEVEL_PROMPT, transcript)
     except Exception:
         return None
     level = raw.get("level") if isinstance(raw, dict) else None

@@ -24,8 +24,18 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     return Config(
         bot_token=env["BOT_TOKEN"],
         groq_api_key=env["GROQ_API_KEY"],
-        admin_tg_id=int(env["ADMIN_TELEGRAM_ID"]),
+        admin_tg_id=_parse_admin_id(env["ADMIN_TELEGRAM_ID"]),
         db_path=env.get("DB_PATH", "tutor.db"),
+        # REMINDER_TIMES and TZ are reserved for Phase 2 (reminders scheduler)
         reminder_times=env.get("REMINDER_TIMES", "13:00,19:00").split(","),
         tz=env.get("TZ", "Europe/Kiev"),
     )
+
+
+def _parse_admin_id(raw: str) -> int:
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(
+            f"ADMIN_TELEGRAM_ID must be an integer, got {raw!r}"
+        ) from None

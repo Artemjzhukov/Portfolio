@@ -1,3 +1,4 @@
+import asyncio
 import random
 
 from aiogram import Router
@@ -7,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
 from english_tutor.services import exercises, lessons, limits, spine
+from english_tutor.utils.telegram import split_for_telegram
 
 router = Router()
 
@@ -17,6 +19,12 @@ class LessonSession(StatesGroup):
 
 class Drill(StatesGroup):
     active = State()
+
+
+@router.message(Command("cancel"))
+async def cancel(message, state: FSMContext):
+    await state.clear()
+    await message.answer("Отменено. /start — заново, /lessons — уроки, /drill — говорение.")
 
 
 def _menu(level: str) -> str:
@@ -53,18 +61,19 @@ async def drill_cmd(message, state: FSMContext, conn):
     await message.answer(lessons.format_drill_prompt(topic))
 
 
-def _resolve_lesson(message, conn, llm, student):
+async def _resolve_lesson(message, conn, llm, student):
     text = (message.text or "").strip()
     level_topics = spine.topics(student["level"])
     if text.isdigit() and 1 <= int(text) <= len(level_topics):
         topic, kind = level_topics[int(text) - 1], "curriculum"
     else:
         topic, kind = text, "theme"
+    kwargs = dict(
+        level=student["level"], topic=topic, kind=kind,
+        student_id=student["tg_id"] if kind == "theme" else None,
+    )
     try:
-        return lessons.get_or_create_lesson(
-            conn, llm, level=student["level"], topic=topic, kind=kind,
-            student_id=student["tg_id"] if kind == "theme" else None,
-        )
+        return await lessons.get_or_create_lesson_async(conn, llm, **kwargs)
     except lessons.LessonFormatError:
         return None
 
@@ -83,12 +92,13 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
         if not limits.can_use_llm(conn, student["tg_id"]):
             await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
             return
-        lesson = _resolve_lesson(message, conn, llm, student)
+        lesson = await _resolve_lesson(message, conn, llm, student)
         if lesson is None:
             await message.answer("Не получилось составить урок, попробуй другую тему.")
             return
         limits.register_llm_call(conn, student["tg_id"])
-        await message.answer(lessons.format_lesson(lesson))
+        for part in split_for_telegram(lessons.format_lesson(lesson)):
+            await message.answer(part)
         await state.update_data(lesson=lesson, ex_idx=0)
         return
     err = limits.check_text(message.text)
@@ -124,7 +134,7 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
         await state.update_data(ex_idx=nxt)
         await message.answer(data["lesson"]["exercises"][nxt]["prompt"])
     else:
-        await message.answer("Урок пройден! /lessons — следующая тема, /drill — speaking practice.")
+        await message.answer("Урок пройден! /lessons — следующая тема, /drill — задание на говорение.")
         await state.clear()
 
 
