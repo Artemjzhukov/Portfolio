@@ -93,6 +93,14 @@ DRILL_PROMPTS = [
 ]
 
 
+def find_lesson_id(conn, kind: str, level: str, topic: str, student_id: int | None) -> int | None:
+    row = conn.execute(
+        "SELECT id FROM lessons WHERE kind=? AND level=? AND topic=? AND student_id IS ?",
+        (kind, level, topic, student_id),
+    ).fetchone()
+    return row["id"] if row else None
+
+
 def format_drill_prompt(topic: str) -> str:
     return f"🎤 Задание на говорение: {topic}"
 

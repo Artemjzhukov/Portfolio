@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS daily_usage (
     llm_calls INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (student_id, day)
 );
+CREATE TABLE IF NOT EXISTS reminder_log (
+    student_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    PRIMARY KEY (student_id, day, slot)
+);
 """
 
 
@@ -115,6 +121,39 @@ def save_test_result(conn, student_id, written_score, voice_transcript, suggeste
         "INSERT INTO test_results (student_id, written_score, voice_transcript, suggested_level) "
         "VALUES (?, ?, ?, ?)",
         (student_id, written_score, voice_transcript, suggested_level),
+    )
+    conn.commit()
+
+
+def insert_correction(conn, student_id, wrong, right, hint_ru, source="chat"):
+    conn.execute(
+        "INSERT INTO corrections (student_id, wrong, right, hint_ru, source) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (student_id, wrong, right, hint_ru, source),
+    )
+    conn.commit()
+
+
+def record_progress(conn, student_id, lesson_id, status="completed", score=None):
+    conn.execute(
+        "INSERT INTO lesson_progress (student_id, lesson_id, status, score) "
+        "VALUES (?, ?, ?, ?)",
+        (student_id, lesson_id, status, score),
+    )
+    conn.commit()
+
+
+def reminder_sent(conn, student_id, day, slot) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM reminder_log WHERE student_id=? AND day=? AND slot=?",
+        (student_id, day, slot),
+    ).fetchone() is not None
+
+
+def mark_reminder_sent(conn, student_id, day, slot):
+    conn.execute(
+        "INSERT OR IGNORE INTO reminder_log (student_id, day, slot) VALUES (?, ?, ?)",
+        (student_id, day, slot),
     )
     conn.commit()
 

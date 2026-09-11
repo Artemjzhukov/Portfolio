@@ -215,6 +215,31 @@ async def test_lesson_flow_stops_for_blocked_student(conn, st):
     assert "start" in msg.sent[-1].lower()
 
 
+async def test_lesson_completion_adds_vocab_and_progress(conn, st):
+    from english_tutor.handlers import lessons as lessons_h
+    from tests.test_lessons import RAW
+
+    db.upsert_student(conn, 42, status="active", level="A2")
+
+    class FakeLLMLections:
+        def chat_json(self, system, user):
+            return RAW
+
+    msg = FakeMessage(tg_id=42, text="1")  # curriculum topic #1 for A2
+    await lessons_h.lessons_cmd(msg, st, conn)
+    await lessons_h.lesson_flow(msg, st, conn, FakeLLMLections())
+    for answer in ("went", "she bought bread", "watched"):
+        await lessons_h.lesson_flow(FakeMessage(tg_id=42, text=answer), st, conn, FakeLLMLections())
+
+    # vocab of the lesson entered the learner's SRS deck
+    words = {r["word_en"] for r in conn.execute("SELECT word_en FROM srs_cards")}
+    assert {"word1", "word8"} <= words
+    # K1: progress row with score = 3 correct answers
+    row = conn.execute("SELECT * FROM lesson_progress").fetchone()
+    assert row is not None and row["status"] == "completed" and row["score"] == 3
+    assert st.state is None  # lesson flow finished
+
+
 async def test_lesson_flow_ignores_sticker(conn, st):
     from english_tutor.handlers import lessons as lessons_h
     from tests.test_lessons import RAW

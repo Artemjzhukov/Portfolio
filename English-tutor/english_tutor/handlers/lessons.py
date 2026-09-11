@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
-from english_tutor.services import exercises, lessons, limits, spine
+from english_tutor.services import exercises, lessons, limits, spine, srs
 from english_tutor.utils.telegram import split_for_telegram
 
 router = Router()
@@ -73,7 +73,9 @@ async def _resolve_lesson(message, conn, llm, student):
         student_id=student["tg_id"] if kind == "theme" else None,
     )
     try:
-        return await lessons.get_or_create_lesson_async(conn, llm, **kwargs)
+        lesson = await lessons.get_or_create_lesson_async(conn, llm, **kwargs)
+        meta = dict(kind=kind, level=student["level"], topic=topic, student_id=kwargs["student_id"])
+        return lesson, meta
     except lessons.LessonFormatError:
         return None
 
@@ -92,14 +94,15 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
         if not limits.can_use_llm(conn, student["tg_id"]):
             await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
             return
-        lesson = await _resolve_lesson(message, conn, llm, student)
-        if lesson is None:
+        lesson_meta = await _resolve_lesson(message, conn, llm, student)
+        if lesson_meta is None:
             await message.answer("Не получилось составить урок, попробуй другую тему.")
             return
+        lesson, meta = lesson_meta
         limits.register_llm_call(conn, student["tg_id"])
         for part in split_for_telegram(lessons.format_lesson(lesson)):
             await message.answer(part)
-        await state.update_data(lesson=lesson, ex_idx=0)
+        await state.update_data(lesson=lesson, ex_idx=0, correct=0, meta=meta)
         return
     err = limits.check_text(message.text)
     if err:
@@ -124,6 +127,7 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
             return
     exercise = data["lesson"]["exercises"][data["ex_idx"]]
     ok = exercises.check_answer(exercise, answer_text)
+    data["correct"] = data.get("correct", 0) + (1 if ok else 0)
     if ok:
         reply = "✅ Верно!"
     else:
@@ -131,9 +135,19 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
     await message.answer(reply)
     nxt = data["ex_idx"] + 1
     if nxt < len(data["lesson"]["exercises"]):
-        await state.update_data(ex_idx=nxt)
+        await state.update_data(ex_idx=nxt, correct=data["correct"])
         await message.answer(data["lesson"]["exercises"][nxt]["prompt"])
     else:
+        # lesson complete: vocab → SRS deck, K1 progress row
+        for w in data["lesson"].get("vocab", []):
+            srs.ensure_card(conn, message.from_user.id, w["en"], w["ru"])
+        meta = data.get("meta", {})
+        lesson_id = lessons.find_lesson_id(
+            conn, meta.get("kind", "curriculum"), meta.get("level", ""),
+            meta.get("topic", ""), meta.get("student_id"),
+        )
+        if lesson_id:
+            db.record_progress(conn, message.from_user.id, lesson_id, "completed", data["correct"])
         await message.answer("Урок пройден! /lessons — следующая тема, /drill — задание на говорение.")
         await state.clear()
 
