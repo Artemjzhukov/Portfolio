@@ -3,7 +3,7 @@ name = "english-tutor"
 version = "0.1.0"
 description = "Telegram bot English tutor for Russian speakers"
 requires-python = ">=3.12"
-dependencies = ["aiogram>=3.13", "groq>=0.11"]
+dependencies = ["aiogram>=3.13", "groq>=0.11", "tzdata>=2024.1"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]

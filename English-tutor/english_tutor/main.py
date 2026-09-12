@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -6,6 +7,9 @@ from english_tutor.bot import create_bot, create_dispatcher
 from english_tutor.config import load_config
 from english_tutor.db import connect
 from english_tutor.llm.groq_service import GroqService
+from english_tutor.scheduler import reminder_loop
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 def load_dotenv(path: str = ".env") -> None:
@@ -25,6 +29,7 @@ async def main() -> None:
     llm = GroqService(api_key=config.groq_api_key)
     dp = create_dispatcher(config, conn, llm)
     bot = create_bot(config)
+    asyncio.create_task(reminder_loop(bot, conn, config))
     await dp.start_polling(bot)
 
 
