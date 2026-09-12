@@ -36,7 +36,7 @@ def test_voice_missing_duration_is_ok():
 
 
 def test_daily_quota_counts_up(conn):
-    db = pytest.importorskip("english_tutor.db")
+    pytest.importorskip("english_tutor.db")
     assert limits.daily_left(conn, 1) == limits.DAILY_LLM_LIMIT
     limits.register_llm_call(conn, 1)
     limits.register_llm_call(conn, 1)
@@ -45,6 +45,7 @@ def test_daily_quota_counts_up(conn):
 
 def test_daily_quota_resets_next_day(conn):
     from datetime import date, timedelta
+
     from english_tutor import db
 
     limits.register_llm_call(conn, 1)

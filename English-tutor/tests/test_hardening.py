@@ -1,11 +1,8 @@
 import asyncio
 import time
 
-import pytest
-
-from english_tutor.llm.groq_service import LLMParseError, GroqService, _extract_json
+from english_tutor.llm.groq_service import GroqService, LLMParseError, _extract_json
 from english_tutor.utils.telegram import split_for_telegram
-
 
 # --- Telegram 4096-char limit ---
 

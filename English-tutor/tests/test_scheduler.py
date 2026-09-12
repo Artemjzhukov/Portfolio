@@ -1,4 +1,3 @@
-import pytest
 
 from english_tutor import db, scheduler
 from english_tutor.services import srs
@@ -28,7 +27,7 @@ def test_reminder_dedup(conn):
 async def test_reminder_loop_sends_once_per_slot(conn):
     db.upsert_student(conn, 42, status="active", level="A2")
     srs.ensure_card(conn, 42, "cat", "кошка")
-    from datetime import date, timedelta
+    from datetime import date
 
     conn.execute(
         "UPDATE srs_cards SET due_date=? WHERE word_en='cat'",

@@ -1,7 +1,6 @@
 from english_tutor.bot import create_bot, create_dispatcher
 from english_tutor.config import load_config
 
-
 CFG = load_config({"BOT_TOKEN": "1:t", "GROQ_API_KEY": "g", "ADMIN_TELEGRAM_ID": "9"})
 
 

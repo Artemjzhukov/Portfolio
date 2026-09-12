@@ -1,6 +1,6 @@
 import pytest
 
-from english_tutor.llm.groq_service import LLMParseError, GroqService
+from english_tutor.llm.groq_service import GroqService, LLMParseError
 from english_tutor.llm.prompts import (
     LESSON_SYSTEM_PROMPT,
     VOICE_LEVEL_PROMPT,

@@ -1,4 +1,3 @@
-import pytest
 
 from english_tutor import db
 from english_tutor.handlers import admin as admin_handlers

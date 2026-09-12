@@ -3,7 +3,6 @@ import pytest
 from english_tutor import db
 from english_tutor.handlers import chat as chat_h
 from english_tutor.services import chat as chat_svc
-from english_tutor.services import srs
 
 
 class FakeMessage:

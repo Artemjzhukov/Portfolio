@@ -70,7 +70,7 @@ async def handle_answer(message, state: FSMContext, conn):
         if not 1 <= choice <= 4:
             raise ValueError
     except (ValueError, AttributeError):
-        await message.answer("На этом шаге ответь числом 1–4. Голосовые принимаю только в конце теста 🎤")
+        await message.answer("На этом шаге ответь числом 1–4. Голос — только в конце теста 🎤")
         return
     answers = data["answers"] + [choice - 1]
     qidx = data["qidx"] + 1
