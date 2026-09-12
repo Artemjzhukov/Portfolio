@@ -1,7 +1,7 @@
 # English Tutor Bot — Product Specification
 
 > **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved** («Plan is Approved»).
-> **Development status:** Phase 1 MVP **complete** — 85 tests green, live smoke test passed (2026-09-09). Phase 2 next (see §20–21).
+> **Development status:** Phase 1 MVP **complete** (85 tests, live smoke passed 2026-09-09). Phase 2 **complete** — SRS, chat corrections, reminders, lesson_progress (135 tests green, ruff clean, 2026-09-11). Phase 3 next (`/stats`, error patterns, deployment).
 > Decisions locked during interview with the owner (12 questions, one branch at a time).
 
 ## 1. What we're building
@@ -83,9 +83,9 @@ A Telegram bot that tutors English for Russian speakers. It teaches grammar (B),
 **Admin:** `/invite` · `/approve <id> [level]` · `/students` · `/stats <id>`
 
 ## 15. Build Phases (locked)
-- **Phase 1 (MVP):** skeleton + config + DB → invite/approval → placement test → lessons (menu + free themes, cached content, voice-in answers) → `/drill`.
-- **Phase 2:** conversation corrections (JSON) → SRS + auto-collection → reminders.
-- **Phase 3:** `/stats`, error-pattern tracking, weekly summaries.
+- **Phase 1 (MVP):** ✅ COMPLETE — skeleton + config + DB → invite/approval → placement test → lessons (menu + free themes, cached content, voice-in answers) → `/drill`.
+- **Phase 2:** ✅ COMPLETE — conversation corrections (JSON) → SRS + auto-collection → reminders 13:00/19:00 → lesson_progress → ruff.
+- **Phase 3:** ⏳ NEXT — `/stats`, error-pattern tracking, weekly summaries, deployment.
 
 ## 16. Testing (per workspace rules)
 - TDD with **pytest** (`uv run pytest`) before implementing core logic: SRS ladder, exercise checking, level assignment, invite flow, JSON-correction parsing.
@@ -155,6 +155,6 @@ Pronunciation scoring (phoneme-level) · TTS · SM-2 algorithm · multi-admin ·
 9. ~~**Russian-only learner copy**~~ — ✅ DONE: drill prompt «🎤 Задание на говорение: …», welcome/completion strings localized.
 10. ~~**lesson_progress (K2)**~~ — ✅ DEFERRED: marked "deferred to Phase 2" in `db.py`; K1 (progress tracking) can be built in Phase 2.
 11. **Still open:** `ruff` linter + CI step.
-12. **Next:** Phase 2 features (SPEC §15) — chat corrections JSON (`can_use_llm` wired from day one), SRS deck + auto-collection, reminders 13:00/19:00.
+12. ~~**Next: Phase 2 features (SPEC §15)**~~ — ✅ DONE (2026-09-11): chat corrections JSON (`can_use_llm`/`register_llm_call` on every message), SRS deck + auto-collection from lessons, reminders 13:00/19:00 (dedup via DB, survives restarts), `lesson_progress` (K1), ruff.
 
-**Testing state:** 110 tests green (`uv run pytest`); Phase 1 live smoke passed (owner, both roles).
+**Testing state:** 135 tests green (`uv run pytest`); ruff clean; Phase 1 live smoke passed (owner, both roles).
