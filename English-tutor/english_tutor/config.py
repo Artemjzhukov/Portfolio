@@ -11,6 +11,8 @@ class Config:
     db_path: str = "tutor.db"
     reminder_times: list[str] = field(default_factory=lambda: ["13:00", "19:00"])
     tz: str = "Europe/Kiev"
+    weekly_summary_day: str = "sunday"
+    weekly_summary_time: str = "19:00"
 
 
 _REQUIRED = ("BOT_TOKEN", "GROQ_API_KEY", "ADMIN_TELEGRAM_ID")
@@ -29,6 +31,9 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         # REMINDER_TIMES and TZ are reserved for Phase 2 (reminders scheduler)
         reminder_times=env.get("REMINDER_TIMES", "13:00,19:00").split(","),
         tz=env.get("TZ", "Europe/Kiev"),
+        # Phase 3: weekly admin summary (dedup survives restarts)
+        weekly_summary_day=env.get("WEEKLY_SUMMARY_DAY", "sunday"),
+        weekly_summary_time=env.get("WEEKLY_SUMMARY_TIME", "19:00"),
     )
 
 

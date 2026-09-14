@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
     student_id INTEGER NOT NULL REFERENCES students(tg_id),
     lesson_id INTEGER NOT NULL REFERENCES lessons(id),
     status TEXT NOT NULL DEFAULT 'in_progress',
-    score INTEGER
+    score INTEGER,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 -- deferred to Phase 2: lesson_progress is not written yet (owner decision K2).
 CREATE TABLE IF NOT EXISTS corrections (
@@ -72,6 +73,13 @@ CREATE TABLE IF NOT EXISTS reminder_log (
     slot TEXT NOT NULL,
     PRIMARY KEY (student_id, day, slot)
 );
+CREATE TABLE IF NOT EXISTS srs_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(tg_id),
+    card_id INTEGER NOT NULL REFERENCES srs_cards(id),
+    day TEXT NOT NULL,
+    correct INTEGER NOT NULL
+);
 """
 
 
@@ -80,7 +88,19 @@ def connect(path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn):
+    """Add columns to tables created by older versions (idempotent)."""
+    corrections_cols = {r["name"] for r in conn.execute("PRAGMA table_info(corrections)")}
+    if "category" not in corrections_cols:
+        conn.execute("ALTER TABLE corrections ADD COLUMN category TEXT")
+    progress_cols = {r["name"] for r in conn.execute("PRAGMA table_info(lesson_progress)")}
+    if "completed_at" not in progress_cols:
+        conn.execute("ALTER TABLE lesson_progress ADD COLUMN completed_at TEXT")
+    conn.commit()
 
 
 def get_student(conn, tg_id):
@@ -136,9 +156,19 @@ def insert_correction(conn, student_id, wrong, right, hint_ru, source="chat"):
 
 def record_progress(conn, student_id, lesson_id, status="completed", score=None):
     conn.execute(
-        "INSERT INTO lesson_progress (student_id, lesson_id, status, score) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT INTO lesson_progress (student_id, lesson_id, status, score, completed_at) "
+        "VALUES (?, ?, ?, ?, datetime('now'))",
         (student_id, lesson_id, status, score),
+    )
+    conn.commit()
+
+
+def log_review(conn, student_id, card_id, correct: bool, day=None):
+    from datetime import date
+
+    conn.execute(
+        "INSERT INTO srs_reviews (student_id, card_id, day, correct) VALUES (?, ?, ?, ?)",
+        (student_id, card_id, day or str(date.today()), 1 if correct else 0),
     )
     conn.commit()
 

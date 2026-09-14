@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
-from english_tutor.services import exercises, lessons, limits, spine, srs
+from english_tutor.services import exercises, lessons, limits, spine, srs, stats
 from english_tutor.utils.telegram import split_for_telegram
 
 router = Router()
@@ -47,6 +47,28 @@ async def lessons_cmd(message, state: FSMContext, conn):
     await state.set_state(LessonSession.active)
     await state.update_data(ex_idx=None, lesson=None)
     await message.answer(_menu(student["level"]))
+
+
+@router.message(Command("mylevel"))
+async def mylevel_cmd(message, state: FSMContext, conn):
+    student = _guard(message, conn, state)
+    if student is None:
+        await message.answer("Сначала нужно пройти тест: /start")
+        return
+    level = student["level"]
+    done = stats.spine_completed_topics(conn, message.from_user.id, level)
+    total = len(spine.topics(level))
+    due = len(srs.due_cards(conn, message.from_user.id))
+    lines = [
+        f"Твой уровень: {level}",
+        f"Пройдено тем уровня: {len(done)}/{total}",
+        f"Слов к повторению: {due} (/review)",
+    ]
+    if len(done) >= 5 and level == "B2":
+        lines.append("\n🏆 Это максимальный уровень бота — отличная работа!")
+    elif len(done) >= 5:
+        lines.append("\n🎓 Ты почти готов к уровню выше — переаттестация откроется скоро!")
+    await message.answer("\n".join(lines))
 
 
 @router.message(Command("drill"))

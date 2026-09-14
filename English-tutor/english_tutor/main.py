@@ -29,7 +29,7 @@ async def main() -> None:
     llm = GroqService(api_key=config.groq_api_key)
     dp = create_dispatcher(config, conn, llm)
     bot = create_bot(config)
-    asyncio.create_task(reminder_loop(bot, conn, config))
+    asyncio.create_task(reminder_loop(bot, conn, config, config.admin_tg_id))
     await dp.start_polling(bot)
 
 

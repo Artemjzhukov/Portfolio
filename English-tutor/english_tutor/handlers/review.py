@@ -61,6 +61,7 @@ async def review_flow(message, state: FSMContext, conn, llm):
             return
     correct = exercises.normalize(given) == exercises.normalize(card["word_en"])
     srs.answer_card(conn, card["id"], correct)
+    db.log_review(conn, message.from_user.id, card["id"], correct)
     data["done"] = idx + 1
     data["correct"] = data["correct"] + (1 if correct else 0)
     feedback = srs.format_feedback(card, correct)

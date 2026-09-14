@@ -85,7 +85,8 @@ A Telegram bot that tutors English for Russian speakers. It teaches grammar (B),
 ## 15. Build Phases (locked)
 - **Phase 1 (MVP):** ✅ COMPLETE — skeleton + config + DB → invite/approval → placement test → lessons (menu + free themes, cached content, voice-in answers) → `/drill`.
 - **Phase 2:** ✅ COMPLETE — conversation corrections (JSON) → SRS + auto-collection → reminders 13:00/19:00 → lesson_progress → ruff.
-- **Phase 3:** ⏳ NEXT — `/stats`, error-pattern tracking, weekly summaries, deployment.
+- **Phase 3:** ✅ COMPLETE (2026-09-12) — admin `/stats` + `/stats <id>` (overview, spine %, retention, error patterns + LLM categorization «слабые места»), learner `/mylevel` (+ reassessment hint; mini-test itself → Phase 4), weekly admin summary (configurable day/time, dedup via `reminder_log`), `srs_reviews` history table, local-run (`run.ps1`, Docker explicitly deferred).
+- **Phase 4:** ⏳ NEXT — reassessment mini-test (5 MC + voice → promotion suggestion), Docker deployment, learner-facing weekly summary (optional).
 
 ## 16. Testing (per workspace rules)
 - TDD with **pytest** (`uv run pytest`) before implementing core logic: SRS ladder, exercise checking, level assignment, invite flow, JSON-correction parsing.
