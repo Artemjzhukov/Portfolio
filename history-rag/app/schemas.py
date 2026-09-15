@@ -348,3 +348,35 @@ class AssessmentResult(BaseModel):
             self.percentage = 0.0
         return self
 
+
+# ---------------------------------------------------------------------------
+# Асинхронные джобы (n8n не ждёт: webhook -> 202 -> опрос /results/{job_id})
+# ---------------------------------------------------------------------------
+
+
+class JobAccepted(BaseModel):
+    """Ответ на POST /process-submission/async."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    status: Literal["queued", "running", "done"]
+    reused: bool = Field(
+        default=False,
+        description="true = тот же submission уже обрабатывался; повторной оплаты LLM нет.",
+    )
+    result: Optional[AssessmentResult] = None
+
+
+class JobStatus(BaseModel):
+    """Ответ на GET /results/{job_id}."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    status: Literal["queued", "running", "done", "error"]
+    result: Optional[AssessmentResult] = None
+    error: Optional[str] = None
+    created_at: Optional[float] = None
+    finished_at: Optional[float] = None
+

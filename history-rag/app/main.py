@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import base64
+import json
 from functools import lru_cache
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 
 from app.config import Settings, get_settings
-from app.schemas import AssessmentResult, SubmissionInput
+from app.jobs import JobStore, compute_job_id
+from app.schemas import (
+    AssessmentResult,
+    JobAccepted,
+    JobStatus,
+    SubmissionInput,
+)
 from app.services.checker_ege import EGEEvaluator
 from app.services.llm import OpenAIJSONClient
 from app.services.ocr import ExtractionService
@@ -84,3 +91,91 @@ def process_submission(
         raise HTTPException(status_code=422, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Асинхронный путь: n8n не держит соединение на долгую оценку
+# ---------------------------------------------------------------------------
+
+
+@lru_cache
+def _get_job_store(db_path: str) -> JobStore:
+    return JobStore(db_path)
+
+
+def _run_job(
+    store: JobStore,
+    pipeline: AssessmentPipeline,
+    job_id: str,
+    payload_dict: dict,
+    file_bytes: bytes,
+    file_name: str | None,
+) -> None:
+    """Фоновая джоба: результат ИЛИ ошибка всегда попадают в store (никаких тихих пропаж)."""
+    store.set_running(job_id)
+    try:
+        result = pipeline.run(SubmissionInput(**payload_dict), file_bytes, file_name)
+        store.set_done(job_id, result.model_dump())
+    except Exception as exc:  # noqa: BLE001 — ошибка джобы это данные для n8n, не краш
+        store.set_error(job_id, f"{type(exc).__name__}: {exc}")
+
+
+@app.post("/process-submission/async")
+def process_submission_async(
+    payload: SubmissionInput,
+    background_tasks: BackgroundTasks,
+    x_api_key: str | None = Header(default=None),
+):
+    settings = get_settings()
+    _authorize(x_api_key, settings)
+    file_bytes, file_name = _fetch_file(payload, settings)
+
+    job_id = compute_job_id(payload, file_bytes, settings)
+    store = _get_job_store(settings.jobs_db_path)
+    reused, existing_result = store.create(
+        job_id,
+        student_id=payload.student_id,
+        subject_id=payload.subject_id,
+        submission_type=payload.submission_type,
+        file_hash=file_bytes.hex()[:32],
+    )
+
+    if existing_result is not None:  # уже посчитано — мгновенный ответ, без повторной оплаты LLM
+        accepted = JobAccepted(
+            job_id=job_id, status="done", reused=True,
+            result=AssessmentResult.model_validate(existing_result),
+        )
+        return json_response(accepted, 200)
+
+    if not reused:
+        pipeline = _build_pipeline()
+        background_tasks.add_task(
+            _run_job, store, pipeline, job_id, payload.model_dump(), file_bytes, file_name
+        )
+    return json_response(JobAccepted(job_id=job_id, status="queued", reused=reused), 202)
+
+
+def json_response(model, status_code: int):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=status_code, content=model.model_dump(mode="json"))
+
+
+@app.get("/results/{job_id}", response_model=JobStatus)
+def get_result(job_id: str, x_api_key: str | None = Header(default=None)) -> JobStatus:
+    settings = get_settings()
+    _authorize(x_api_key, settings)
+    row = _get_job_store(settings.jobs_db_path).get(job_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    result = None
+    if row["result_json"]:
+        result = AssessmentResult.model_validate(json.loads(row["result_json"]))
+    return JobStatus(
+        job_id=row["job_id"],
+        status=row["status"],
+        result=result,
+        error=row["error"],
+        created_at=row["created_at"],
+        finished_at=row["finished_at"],
+    )

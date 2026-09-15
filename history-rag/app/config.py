@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # --- API ---
     api_key: str = ""                      # shared secret для n8n; пусто = авторизация выключена
+    jobs_db_path: str = "assessment_jobs.db"  # SQLite store джоб (idempotency/аудит)
 
 
 @lru_cache

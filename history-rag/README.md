@@ -70,6 +70,26 @@ FastAPI-сервис в `app/`: принимает работу ученика �
 
 `{"status": "ok", "llm_provider": "...", "qdrant_ready": bool}`
 
+### Асинхронный путь (рекомендуется для n8n)
+
+Полная оценка ЕГЭ занимает минуты — n8n не должен ждать по HTTP. Схема:
+webhook → `POST /process-submission/async` → мгновенный ack в Telegram →
+опрос → отправка отчёта.
+
+```
+POST /process-submission/async          # 202 {"job_id", "status": "queued", "reused"}
+GET  /results/{job_id}                  # {"status": "queued|running|done|error", "result": {...}}
+```
+
+- Повторный POST того же submission (ученик + файл + ключи + рубрики) →
+  **мгновенный 200 с готовым результатом** и `reused: true` — двойной оплаты
+  LLM и дубликатов в Notion нет (идемпотентность по SHA-256 входа).
+- Джобы хранятся в SQLite (`JOBS_DB_PATH`, по умолчанию
+  `assessment_jobs.db`) — это же и audit log: кто, когда, с каким файлом,
+  с каким результатом/ошибкой. Зависшая (>20 мин) queued/running джоба
+  автоматически перезапускается; `error`-джоба перезапускается при повторном
+  POST.
+
 ## Как оценивается
 
 - **standard_test** — детерминированно: нормализация (регистр, ё→е, пунктуация,

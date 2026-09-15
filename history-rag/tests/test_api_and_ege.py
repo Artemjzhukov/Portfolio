@@ -288,3 +288,69 @@ class TestAPI:
         )
         assert resp.status_code == 401
         settings.api_key = ""
+
+    # ---- асинхронный путь (job store + идемпотентность) ----
+
+    def test_async_flow_and_idempotency(self, client, settings, tmp_path, monkeypatch):
+        from app.schemas import AssessmentResult, TaskBreakdown
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class RealStubPipeline:
+            def run(self, payload, file_bytes, file_name):
+                return AssessmentResult(
+                    student_id=payload.student_id, subject_id=payload.subject_id,
+                    submission_type=payload.submission_type,
+                    total_score=1, max_possible_score=1, percentage=0,
+                    summary_feedback="ok",
+                    task_breakdown=[TaskBreakdown(task_number=1, max_points=1,
+                                                  earned_points=1, status="Correct")],
+                )
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: RealStubPipeline())
+        body = dict(
+            file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
+            subject_id="history", student_id="s1", answer_key={"1": "3"},
+        )
+
+        # 1) первый запрос -> 202 queued, фоновая задача выполнится после ответа
+        resp1 = client.post("/process-submission/async", json=body)
+        assert resp1.status_code == 202
+        job_id = resp1.json()["job_id"]
+        assert resp1.json()["reused"] is False
+
+        # 2) джоба посчитана (TestClient исполняет background tasks) -> done + результат
+        resp2 = client.get(f"/results/{job_id}")
+        assert resp2.status_code == 200
+        status = resp2.json()
+        assert status["status"] == "done"
+        assert status["result"]["total_score"] == 1.0
+
+        # 3) повторный POST того же submission -> done мгновенно, reused=true, без нового расчёта
+        resp3 = client.post("/process-submission/async", json=body)
+        assert resp3.status_code == 200
+        assert resp3.json()["reused"] is True
+        assert resp3.json()["result"]["total_score"] == 1.0
+
+    def test_async_error_stored_not_lost(self, client, settings, tmp_path, monkeypatch):
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class BoomPipeline:
+            def run(self, payload, file_bytes, file_name):
+                raise RuntimeError("LLM недоступна")
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: BoomPipeline())
+        resp = client.post("/process-submission/async", json=dict(
+            file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
+            subject_id="history", student_id="s1", answer_key={"1": "3"},
+        ))
+        assert resp.status_code == 202
+        resp2 = client.get(f"/results/{resp.json()['job_id']}")
+        body = resp2.json()
+        assert body["status"] == "error"
+        assert "LLM недоступна" in body["error"]
+
+    def test_unknown_job_404(self, client, settings, tmp_path):
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+        resp = client.get("/results/nonexistent")
+        assert resp.status_code == 404

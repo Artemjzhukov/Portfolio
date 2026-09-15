@@ -7,3 +7,4 @@ data/*
 !data/criteria/
 .env
 .pytest_cache/
+assessment_jobs.db
