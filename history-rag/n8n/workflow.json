@@ -1,0 +1,286 @@
+{
+  "name": "Exam Assessment (history-rag)",
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "nodes": [
+    {
+      "id": "sticky-setup",
+      "name": "Sticky — Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-660, -420],
+      "parameters": {
+        "content": "## Настройка перед включением\n1. Credentials: Telegram bot, Notion integration — привяжите к узлам Telegram/Notion.\n2. Переменные окружения n8n (N8N_BLOCK_ENV_ACCESS_IN_NODE=false):\n   ASSESSMENT_URL=http://<host>:8000\n   ASSESSMENT_API_KEY=<API_KEY из .env сервиса>\n   NOTION_DATABASE_ID=<id базы>\n   TUTOR_CHAT_ID=<chat преподавателя для ошибок>\n3. Notion DB свойства (EN-имена): Name(title), Score(number), Percentage(number), NeedsReview(checkbox), SummaryMd(text), JobId(text), Student(text), Subject(select).\n4. Webhook URL (Production) отдать в Telegram-bot/клиенту: POST {file_bytes|file_url, file_name, submission_type, subject_id, student_id, answer_key?}",
+        "width": 460, "height": 380, "color": 4
+      }
+    },
+    {
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-660, 0],
+      "webhookId": "exam-submission",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "exam-submission",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-submit",
+      "name": "Submit for assessment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-440, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASSESSMENT_URL }}/process-submission/async",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.ASSESSMENT_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ file_bytes: $json.body.file_bytes, file_url: $json.body.file_url, file_name: $json.body.file_name, submission_type: $json.body.submission_type, subject_id: $json.body.subject_id, student_id: $json.body.student_id, answer_key: $json.body.answer_key }) }}",
+        "options": { "timeout": 60000 }
+      }
+    },
+    {
+      "id": "node-ack",
+      "name": "Telegram Ack",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-220, 0],
+      "parameters": {
+        "chatId": "={{ $json.body ? $json.body.student_id : $('Webhook').item.json.body.student_id }}",
+        "text": "=✅ Работа принята, идёт проверка. Это займёт несколько минут — пришлю результат сюда.",
+        "additionalFields": { "parse_mode": "HTML", "appendAttribution": false }
+      }
+    },
+    {
+      "id": "node-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, job_id: $('Submit for assessment').item.json.job_id, reused: $('Submit for assessment').item.json.reused }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-wait",
+      "name": "Wait 2 minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [220, 0],
+      "webhookId": "wait-resume",
+      "parameters": { "resume": "timeInterval", "amount": 2, "unit": "minutes" }
+    },
+    {
+      "id": "node-poll",
+      "name": "Poll result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "parameters": {
+        "url": "={{ $env.ASSESSMENT_URL }}/results/{{ $('Submit for assessment').item.json.job_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.ASSESSMENT_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      }
+    },
+    {
+      "id": "node-if-finished",
+      "name": "Done or error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "cond-done",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "done",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "cond-error",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "error",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-if-ok",
+      "name": "Graded OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-ok",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "done",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-tg-error",
+      "name": "Telegram Error Notice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 220],
+      "parameters": {
+        "chatId": "={{ $env.TUTOR_CHAT_ID }}",
+        "text": "=⚠️ Ошибка проверки работы (job {{ $('Submit for assessment').item.json.job_id }}):\n{{ $('Poll result').item.json.error }}\n\nОтправьте работу повторно или проверьте логи сервиса.",
+        "additionalFields": { "appendAttribution": false }
+      }
+    },
+    {
+      "id": "node-tg-short",
+      "name": "Telegram Short Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, -60],
+      "parameters": {
+        "chatId": "={{ $json.result.student_id }}",
+        "text": "={{ $json.result.telegram_short }}",
+        "additionalFields": { "parse_mode": "HTML", "appendAttribution": false }
+      }
+    },
+    {
+      "id": "node-to-file",
+      "name": "Report to file",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -60],
+      "parameters": {
+        "jsCode": "const report = $json.result.summary_feedback;\nconst student = $json.result.student_id;\nconst binary = await this.helpers.prepareBinaryData(\n  Buffer.from(report, 'utf-8'),\n  'report_' + student + '.md',\n  'text/markdown'\n);\nreturn [{ json: { chatId: student }, binary }];"
+      }
+    },
+    {
+      "id": "node-tg-doc",
+      "name": "Telegram Send Document",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1540, -60],
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": { "appendAttribution": false }
+      }
+    },
+    {
+      "id": "node-notion",
+      "name": "Notion Create Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1760, -60],
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": "={{ $env.NOTION_DATABASE_ID }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Name|title",
+              "title": "={{ $('Poll result').item.json.result.student_id }} — {{ $now.format('yyyy-MM-dd HH:mm') }}"
+            },
+            {
+              "key": "Score|number",
+              "numberContent": "={{ $('Poll result').item.json.result.total_score }}"
+            },
+            {
+              "key": "Percentage|number",
+              "numberContent": "={{ $('Poll result').item.json.result.percentage }}"
+            },
+            {
+              "key": "NeedsReview|checkbox",
+              "checkbox": "={{ $('Poll result').item.json.result.needs_human_review }}"
+            },
+            {
+              "key": "SummaryMd|rich_text",
+              "rich_text": "={{ $('Poll result').item.json.result.summary_feedback }}"
+            },
+            {
+              "key": "JobId|rich_text",
+              "rich_text": "={{ $('Poll result').item.json.job_id }}"
+            },
+            {
+              "key": "Student|rich_text",
+              "rich_text": "={{ $('Poll result').item.json.result.student_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Submit for assessment", "type": "main", "index": 0 }]]
+    },
+    "Submit for assessment": {
+      "main": [[{ "node": "Telegram Ack", "type": "main", "index": 0 }]]
+    },
+    "Telegram Ack": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Respond to Webhook": {
+      "main": [[{ "node": "Wait 2 minutes", "type": "main", "index": 0 }]]
+    },
+    "Wait 2 minutes": {
+      "main": [[{ "node": "Poll result", "type": "main", "index": 0 }]]
+    },
+    "Poll result": {
+      "main": [[{ "node": "Done or error?", "type": "main", "index": 0 }]]
+    },
+    "Done or error?": {
+      "main": [
+        [{ "node": "Graded OK?", "type": "main", "index": 0 }],
+        [{ "node": "Wait 2 minutes", "type": "main", "index": 0 }]
+      ]
+    },
+    "Graded OK?": {
+      "main": [
+        [{ "node": "Telegram Short Report", "type": "main", "index": 0 }],
+        [{ "node": "Telegram Error Notice", "type": "main", "index": 0 }]
+      ]
+    },
+    "Telegram Short Report": {
+      "main": [[{ "node": "Report to file", "type": "main", "index": 0 }]]
+    },
+    "Report to file": {
+      "main": [[{ "node": "Telegram Send Document", "type": "main", "index": 0 }]]
+    },
+    "Telegram Send Document": {
+      "main": [[{ "node": "Notion Create Page", "type": "main", "index": 0 }]]
+    }
+  }
+}

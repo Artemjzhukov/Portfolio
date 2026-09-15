@@ -35,6 +35,74 @@ zero external API calls is a hard requirement, not a default preference.
 
 ---
 
+# Интеграция с n8n
+
+Готовый воркфлоу: `n8n/workflow.json` (импорт в n8n: Workflows → Import from File).
+
+## Схема потока
+
+```
+Webhook (POST /webhook/exam-submission)
+  → POST {ASSESSMENT_URL}/process-submission/async   (202 + job_id)
+  → Telegram ack ученику ("работа принята, идёт проверка")
+  → Respond to Webhook ({ok, job_id})
+  → Wait 2 мин → GET /results/{job_id} → (цикл, пока queued/running)
+  → IF done|error
+      ├─ done  → Telegram короткий отчёт (HTML) → отчёт файлом (.md) → Notion
+      └─ error → Telegram преподавателю (TUTOR_CHAT_ID) с причиной
+```
+
+## Переменные окружения n8n
+
+| Переменная | Значение |
+|---|---|
+| `ASSESSMENT_URL` | `http://<host>:8000` (адрес микросервиса) |
+| `ASSESSMENT_API_KEY` | значение `API_KEY` из `.env` сервиса |
+| `NOTION_DATABASE_ID` | id базы Notion для отчётов |
+| `TUTOR_CHAT_ID` | chat_id преподавателя (ветка ошибок) |
+
+> Доступ `$env` в узлах разрешён по умолчанию в self-hosted n8n. Если
+> запрещён (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`) — снимите запрет или
+> впишите значения в узлы напрямую.
+
+## Credentials
+
+После импорта привяжите: Telegram (бот, созданный через @BotFather) к узлам
+«Telegram …», Notion integration (с доступом к базе) к «Notion Create Page».
+Если поле «Parse Settings/HTML» не подтянулось — включите HTML вручную в
+узлах «Telegram Short Report» и «Telegram Ack».
+
+## База Notion
+
+Свойства (английские имена — осознанно, для стабильности API):
+
+| Свойство | Тип | Источник |
+|---|---|---|
+| Name | title | `student_id — дата` |
+| Score | number | `total_score` |
+| Percentage | number | `percentage` |
+| NeedsReview | checkbox | `needs_human_review` (вид «Проверить вручную») |
+| SummaryMd | rich_text | `summary_feedback` (полный отчёт) |
+| JobId | rich_text | `job_id` (трассировка в docker logs) |
+| Student | rich_text | `student_id` |
+
+Дедупликация повторных отправок обеспечена идемпотентностью сервиса
+(`reused: true` → Notion-страница не создаётся второй раз).
+
+## Как тестировать
+
+```bash
+# сервис поднят (uvicorn или docker compose), n8n открыта:
+# 1. Импортируйте workflow.json, привяжите credentials, включите воркфлоу.
+# 2. Отправьте тестовый webhook:
+curl -X POST "http://<n8n>/webhook/exam-submission" \
+  -H "Content-Type: application/json" \
+  -d '{"file_bytes":"<base64>","file_name":"work.txt","submission_type":"standard_test","subject_id":"history","student_id":"tg_12345","answer_key":{"1":"3"}}'
+# 3. В Telegram: ack → через ~2 мин короткий отчёт + файл; в Notion — страница.
+```
+
+---
+
 # Микросервис оценки работ (EGE & Standard Tests)
 
 FastAPI-сервис в `app/`: принимает работу ученика от n8n, распознаёт текст

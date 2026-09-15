@@ -142,10 +142,9 @@
 
 ## Бэклог (остаток фазы 5, по приоритету)
 
-1. **n8n-воркфлоу**: webhook → ack в Telegram (из 202) → Wait/poll
-   `/results/{job_id}` → Telegram (сообщение + файл) → Notion
-   (дедупликация по ключу `student_id + дата + file_hash`, флаг
-   `NeedsReview` отдельным checkbox-свойством; имена свойств — английские).
+1. ✅ **n8n-воркфлоу** — готов: `n8n/workflow.json` + инструкция в README
+   (webhook → ack → Wait/poll → Telegram → Notion; ветка ошибок в
+   `TUTOR_CHAT_ID`). Осталось: привязать credentials и включить в n8n.
 2. **Хранилище эталонов ответов в сервисе** (убрать `answer_key` из payload).
 3. Заполнить официальные рубрики ЕГЭ (задания 20–27 и др. предметы).
 4. Опционально: `langchain-huggingface` вместо deprecated

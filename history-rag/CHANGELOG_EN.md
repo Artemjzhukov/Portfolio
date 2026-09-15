@@ -149,10 +149,9 @@ Decision: use OpenRouter keys. Implemented:
 
 ## Backlog (rest of Phase 5, by priority)
 
-1. **n8n workflow**: webhook → Telegram ack (from the 202) → Wait/poll
-   `/results/{job_id}` → Telegram (message + file) → Notion (dedupe key
-   `student_id + date + file_hash`, `NeedsReview` as a checkbox property;
-   English property names).
+1. ✅ **n8n workflow** — done: `n8n/workflow.json` + README instructions
+   (webhook → ack → Wait/poll → Telegram → Notion; error branch to
+   `TUTOR_CHAT_ID`). Remaining: bind credentials and activate in n8n.
 2. **Answer-key storage inside the service** (drop `answer_key` from the
    n8n payload).
 3. Fill in the official EGE rubrics (tasks 20–27, other subjects).
