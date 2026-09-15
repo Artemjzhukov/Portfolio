@@ -49,6 +49,54 @@ def _breakdown_from_ege(
     )
 
 
+def html_escape(text: str) -> str:
+    """Экранирование для Telegram HTML-режима: произвольный текст ученика безопасен."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+TG_SHORT_LIMIT = 3500  # запас до лимита Telegram 4096
+
+
+def build_telegram_short(result_data: dict) -> str:
+    """Короткое HTML-сообщение для Telegram: балл + топ-3 проблемных задания.
+
+    Длинные ответы и подробности НЕ включаются — полный отчёт уходит файлом
+    (summary_feedback) и в Notion. Это устраняет класс ошибок «сообщение не
+    отправилось из-за 4096 знаков / сломанного Markdown».
+    """
+    type_ru = "ЕГЭ" if result_data["submission_type"] == "ege_exam" else "стандартный тест"
+    lines = [
+        f"<b>Проверка работы — {html_escape(result_data['subject_id'])}</b>",
+        f"Тип: {type_ru}",
+        f"<b>Набрано: {result_data['total_score']:g} из "
+        f"{result_data['max_possible_score']:g} ({result_data['percentage']:g}%)</b>",
+    ]
+
+    rank = {"Incorrect": 0, "Not Submitted": 1, "Partially Correct": 2, "Correct": 3}
+    problems = sorted(result_data["task_breakdown"], key=lambda t: rank[t["status"]])
+    problems = [t for t in problems if t["status"] != "Correct"][:3]
+
+    emoji = {"Correct": "✅", "Partially Correct": "🟡", "Incorrect": "❌", "Not Submitted": "⚪"}
+    for t in problems:
+        reason = t["deduction_reason"]
+        reason = html_escape(" ".join(reason.split())[:140]) + ("…" if len(reason) > 140 else "")
+        lines.append(f"{emoji[t['status']]} №{t['task_number']}: {t['earned_points']:g}/{t['max_points']:g}")
+        if reason:
+            lines.append(f"   {reason}")
+
+    if result_data.get("needs_human_review"):
+        lines.append("\n⚠️ Часть оценок требует проверки преподавателем.")
+    if len(problems) < len([t for t in result_data["task_breakdown"] if t["status"] != "Correct"]):
+        lines.append("\n… и другие — полный разбор в файле и в Notion.")
+    else:
+        lines.append("\nПолный разбор — в файле и в Notion.")
+
+    text = "\n".join(lines)
+    if len(text) > TG_SHORT_LIMIT:  # теоретически возможен при огромных reason
+        text = text[: TG_SHORT_LIMIT - 1] + "…"
+    return text
+
+
 def build_summary(result_data: dict, extracted: ExtractedSubmission | None) -> str:
     """Markdown-обзор на русском для Telegram/Notion."""
     lines = [
@@ -125,6 +173,7 @@ class AssessmentPipeline:
             "warnings": warnings,
         }
         result_data["summary_feedback"] = build_summary(result_data, extracted)
+        result_data["telegram_short"] = build_telegram_short(result_data)
         return AssessmentResult.model_validate(result_data)
 
     def _run_ege(

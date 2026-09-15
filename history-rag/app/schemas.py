@@ -332,7 +332,11 @@ class AssessmentResult(BaseModel):
     total_score: float = Field(..., ge=0)
     max_possible_score: float = Field(..., ge=0)
     percentage: float = Field(..., ge=0.0, le=100.0)
-    summary_feedback: str = Field(..., description="Markdown-обзор на русском.")
+    summary_feedback: str = Field(..., description="Markdown-обзор на русском (полный отчёт: Notion + файл в Telegram).")
+    telegram_short: str = Field(
+        default="",
+        description="Короткое HTML-сообщение для Telegram (<=3500 знаков): балл + топ-проблемные задания.",
+    )
     task_breakdown: list[TaskBreakdown] = Field(default_factory=list)
     needs_human_review: bool = False
     warnings: list[str] = Field(
