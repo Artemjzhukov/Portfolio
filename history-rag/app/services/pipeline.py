@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.schemas import (
     AssessmentResult,
     ExtractedSubmission,
@@ -13,6 +15,8 @@ from app.services.checker_ege import EGEEvaluator
 from app.services.checker_test import answers_match, check_standard_test
 from app.services.ocr import ExtractionService
 from app.services.rag import TheoryRetriever
+
+logger = logging.getLogger(__name__)
 
 
 def _breakdown_from_ege(
@@ -137,9 +141,23 @@ class AssessmentPipeline:
         self.ege = ege_evaluator
         self.retriever = retriever
 
-    def run(self, payload: SubmissionInput, file_bytes: bytes, file_name: str | None) -> AssessmentResult:
+    def run(
+        self,
+        payload: SubmissionInput,
+        file_bytes: bytes,
+        file_name: str | None,
+        job_id: str | None = None,
+    ) -> AssessmentResult:
+        """job_id пробрасывается только для логов (корреляция джоба <-> этапы)."""
         extracted = self.extraction.extract(file_bytes=file_bytes, file_name=file_name)
         warnings: list[str] = []
+        ctx = f"job={job_id or '-'}"
+
+        logger.info(
+            "%s extracted: source=%s pages=%s segments=%d unmatched=%d",
+            ctx, extracted.source_type, extracted.pages, len(extracted.segments),
+            len(extracted.unmatched_segments),
+        )
 
         if extracted.unmatched_segments:
             warnings.append(
@@ -174,6 +192,10 @@ class AssessmentPipeline:
         }
         result_data["summary_feedback"] = build_summary(result_data, extracted)
         result_data["telegram_short"] = build_telegram_short(result_data)
+        logger.info(
+            "%s assessed: total=%g/%g review=%s warnings=%d",
+            ctx, float(total), float(max_possible), needs_review, len(warnings),
+        )
         return AssessmentResult.model_validate(result_data)
 
     def _run_ege(

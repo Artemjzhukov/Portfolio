@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from functools import lru_cache
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 from app.config import Settings, get_settings
 from app.jobs import JobStore, compute_job_id
@@ -114,9 +122,10 @@ def _run_job(
     """Фоновая джоба: результат ИЛИ ошибка всегда попадают в store (никаких тихих пропаж)."""
     store.set_running(job_id)
     try:
-        result = pipeline.run(SubmissionInput(**payload_dict), file_bytes, file_name)
+        result = pipeline.run(SubmissionInput(**payload_dict), file_bytes, file_name, job_id=job_id)
         store.set_done(job_id, result.model_dump())
     except Exception as exc:  # noqa: BLE001 — ошибка джобы это данные для n8n, не краш
+        logger.exception("job=%s pipeline failure", job_id)
         store.set_error(job_id, f"{type(exc).__name__}: {exc}")
 
 

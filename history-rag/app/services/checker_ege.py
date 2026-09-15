@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import statistics
 from pathlib import Path
@@ -23,6 +24,8 @@ from app.schemas import (
     validate_evaluation,
 )
 from app.services.llm import LLMClient
+
+logger = logging.getLogger(__name__)
 
 EVAL_SYSTEM_PROMPT = (
     "Ты — строгий и беспристрастный эксперт ЕГЭ. Оценивай ответ ученика ИСКЛЮЧИТЕЛЬНО "
@@ -166,6 +169,14 @@ class EGEEvaluator:
                             f"хранилищем материалов — требуется проверка преподавателя."
                         )
 
+        if review_reasons:
+            logger.warning(
+                "task=%s needs human review: %s", rubric.task_number, "; ".join(review_reasons)
+            )
+        logger.info(
+            "task=%s evaluated: earned=%d/%d",
+            rubric.task_number, sum(v.earned_points for v in verdicts), rubric.max_points,
+        )
         return EGEEvaluation(
             task_number=rubric.task_number,
             criteria_evaluations=verdicts,

@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import time
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -72,11 +75,16 @@ class JobStore:
                     (job_id, student_id, subject_id, submission_type, file_hash, time.time()),
                 )
                 self._conn.commit()
+                logger.info("job=%s accepted new: student=%s subject=%s type=%s",
+                            job_id, student_id, subject_id, submission_type)
                 return False, None
             if row["status"] == "done":
+                logger.info("job=%s reuse done result (no LLM spend)", job_id)
                 return True, json.loads(row["result_json"])
             if row["status"] in ("queued", "running") and time.time() - row["created_at"] <= STALE_SECONDS:
+                logger.info("job=%s reuse in-flight (status=%s)", job_id, row["status"])
                 return True, None
+            logger.warning("job=%s reset from %s (stale or error) — re-queued", job_id, row["status"])
             self._conn.execute(
                 "UPDATE jobs SET status = 'queued', error = NULL, created_at = ?,"
                 " finished_at = NULL WHERE job_id = ?",
@@ -91,9 +99,11 @@ class JobStore:
             return dict(row) if row else None
 
     def set_running(self, job_id: str) -> None:
+        logger.info("job=%s running", job_id)
         self._update(job_id, "UPDATE jobs SET status = 'running' WHERE job_id = ?")
 
     def set_done(self, job_id: str, result: dict) -> None:
+        logger.info("job=%s done", job_id)
         self._update(
             job_id,
             "UPDATE jobs SET status = 'done', result_json = ?, finished_at = ? WHERE job_id = ?",
@@ -101,6 +111,7 @@ class JobStore:
         )
 
     def set_error(self, job_id: str, error: str) -> None:
+        logger.error("job=%s error: %s", job_id, error)
         self._update(
             job_id,
             "UPDATE jobs SET status = 'error', error = ?, finished_at = ? WHERE job_id = ?",

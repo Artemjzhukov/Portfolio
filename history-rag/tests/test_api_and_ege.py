@@ -297,7 +297,7 @@ class TestAPI:
         settings.jobs_db_path = str(tmp_path / "jobs.db")
 
         class RealStubPipeline:
-            def run(self, payload, file_bytes, file_name):
+            def run(self, payload, file_bytes, file_name, job_id=None):
                 return AssessmentResult(
                     student_id=payload.student_id, subject_id=payload.subject_id,
                     submission_type=payload.submission_type,
@@ -336,7 +336,7 @@ class TestAPI:
         settings.jobs_db_path = str(tmp_path / "jobs.db")
 
         class BoomPipeline:
-            def run(self, payload, file_bytes, file_name):
+            def run(self, payload, file_bytes, file_name, job_id=None):
                 raise RuntimeError("LLM недоступна")
 
         monkeypatch.setattr(main_module, "_build_pipeline", lambda: BoomPipeline())
@@ -354,3 +354,34 @@ class TestAPI:
         settings.jobs_db_path = str(tmp_path / "jobs.db")
         resp = client.get("/results/nonexistent")
         assert resp.status_code == 404
+
+    def test_job_id_in_logs(self, client, settings, tmp_path, monkeypatch, caplog):
+        """Корреляция: job_id присутствует в логах принятия и жизненного цикла джобы."""
+        import logging as logmod
+
+        from app.schemas import AssessmentResult
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class RealStubPipeline:
+            def run(self, payload, file_bytes, file_name, job_id=None):
+                return AssessmentResult(
+                    student_id=payload.student_id, subject_id=payload.subject_id,
+                    submission_type=payload.submission_type,
+                    total_score=1, max_possible_score=1, percentage=0,
+                    summary_feedback="ok",
+                )
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: RealStubPipeline())
+        with caplog.at_level(logmod.INFO):
+            resp = client.post("/process-submission/async", json=dict(
+                file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
+                subject_id="history", student_id="s1", answer_key={"1": "3"},
+            ))
+            job_id = resp.json()["job_id"]
+            client.get(f"/results/{job_id}")
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any(job_id in m for m in messages)
+        assert any("accepted new" in m for m in messages)
+        assert any("done" in m for m in messages)
