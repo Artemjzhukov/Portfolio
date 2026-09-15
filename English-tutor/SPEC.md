@@ -1,7 +1,8 @@
 # English Tutor Bot — Product Specification
 
 > **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved** («Plan is Approved»).
-> **Development status:** Phase 1 MVP **complete** (85 tests, live smoke passed 2026-09-09). Phase 2 **complete** — SRS, chat corrections, reminders, lesson_progress (135 tests green, ruff clean, 2026-09-11). Phase 3 next (`/stats`, error patterns, deployment).
+> **Development status:** Phase 1 MVP **complete** (85 tests, live smoke passed 2026-09-09). Phase 2 **complete** — SRS, chat corrections, reminders, lesson_progress (135 tests green, ruff clean, 2026-09-11). Phase 3 **complete** — stats, error patterns, weekly summary, local run (150 tests green, ruff clean, 2026-09-12).
+> **⏸️ PROJECT FROZEN (2026-09-15)** at Phase 3 complete. Owner runs the bot live from this machine. Next steps (owner-driven): VPS + Docker deployment; **Phase 4 backlog:** reassessment mini-test, learner weekly summary, Docker deployment. Resume by planning Phase 4.
 > Decisions locked during interview with the owner (12 questions, one branch at a time).
 
 ## 1. What we're building
