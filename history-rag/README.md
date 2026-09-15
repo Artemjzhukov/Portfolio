@@ -111,6 +111,23 @@ uvicorn app.main:app --port 8000
 `CONSISTENCY_VOTES` (медиана из N голосов для спорных критериев),
 `OCR_CONFIDENCE_THRESHOLD`, `RAG_TOP_K`, `API_KEY`.
 
+### OpenRouter вместо OpenAI
+
+Любой OpenAI-совместимый провайдер работает через `LLM_BASE_URL`:
+
+```env
+LLM_PROVIDER=openai
+LLM_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_KEY=sk-or-v1-...
+OPENAI_EVAL_MODEL=openai/gpt-4o
+OPENAI_OCR_MODEL=openai/gpt-4o
+LLM_STRICT_JSON=false   # если модель не поддерживает Structured Outputs
+```
+
+При `LLM_STRICT_JSON=false` сервис переключается на `json_object`-режим:
+схема встраивается в промпт, ответ валидируется Pydantic и при невалидном
+JSON повторяется запрос (retry) — защита от галлюцинаций сохраняется.
+
 ## Известные ограничения
 
 - Vision OCR — только через OpenAI; при `LLM_PROVIDER=ollama` изображения и

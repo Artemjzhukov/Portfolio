@@ -47,12 +47,14 @@ class OpenAIJSONClient:
     """
 
     def __init__(self, settings: Settings, *, model: str | None = None) -> None:
-        self.strict = settings.llm_provider == "openai"
-        base_url = f"{settings.ollama_base_url.rstrip('/')}/v1" if not self.strict else None
-        self._client = OpenAI(
-            api_key=settings.openai_api_key or "not-set",
-            base_url=base_url,
-        )
+        self.strict = settings.llm_provider == "openai" and settings.llm_strict_json
+        if settings.llm_provider == "ollama":
+            base_url = f"{settings.ollama_base_url.rstrip('/')}/v1"
+        elif settings.llm_base_url:
+            base_url = settings.llm_base_url  # напр. OpenRouter
+        else:
+            base_url = None  # api.openai.com
+        self._client = OpenAI(api_key=settings.openai_api_key or "not-set", base_url=base_url)
         if model:
             self.model = model
         elif self.strict:

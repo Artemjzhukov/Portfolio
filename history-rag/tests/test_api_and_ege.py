@@ -38,6 +38,29 @@ def llm_verdict(k1_points=2, k2_points=1):
     }
 
 
+class TestOpenRouterConfig:
+    def test_openrouter_base_url_and_model(self, settings):
+        """OpenRouter: ключ и модели те же, меняется только base_url."""
+        from app.services.llm import OpenAIJSONClient
+
+        settings.openai_api_key = "sk-or-v1-test"
+        settings.llm_base_url = "https://openrouter.ai/api/v1"
+        settings.openai_eval_model = "openai/gpt-4o"
+        client = OpenAIJSONClient(settings)
+        assert client._client.base_url.path.rstrip("/") == "/api/v1"
+        assert client.model == "openai/gpt-4o"
+        assert client.strict  # strict JSON Schema по умолчанию включён
+
+    def test_openrouter_non_strict_fallback(self, settings):
+        """llm_strict_json=false -> json_object режим (для моделей без Structured Outputs)."""
+        from app.services.llm import OpenAIJSONClient
+
+        settings.llm_base_url = "https://openrouter.ai/api/v1"
+        settings.llm_strict_json = False
+        client = OpenAIJSONClient(settings)
+        assert not client.strict
+
+
 class TestEGEEvaluator:
     def test_valid_evaluation(self, settings, rubric_task19):
         evaluator = EGEEvaluator(llm=FakeLLM([llm_verdict()]), settings=settings)

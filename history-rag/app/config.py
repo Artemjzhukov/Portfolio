@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,8 +21,17 @@ class Settings(BaseSettings):
 
     # --- LLM ---
     # openai: strict JSON Schema + Vision OCR. ollama: локальный OpenAI-совместимый сервер.
+    # Любой OpenAI-совместимый провайдер (напр. OpenRouter) — через llm_base_url.
     llm_provider: Literal["openai", "ollama"] = "openai"
     openai_api_key: str = ""
+    llm_base_url: str = Field(
+        default="",
+        description="OpenAI-совместимый endpoint, напр. https://openrouter.ai/api/v1. Пусто = api.openai.com.",
+    )
+    llm_strict_json: bool = Field(
+        default=True,
+        description="Strict JSON Schema (Structured Outputs). Для провайдеров без поддержки (часть моделей OpenRouter) — false: json_object + схема в промпте.",
+    )
     openai_eval_model: str = "gpt-4o"      # оценка ЕГЭ по критериям
     openai_ocr_model: str = "gpt-4o"       # распознавание почерка (нужна Vision-модель)
     ollama_base_url: str = "http://localhost:11434"
