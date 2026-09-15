@@ -1,0 +1,16 @@
+# Project Rules & Custom Skills
+
+## Skill: /drill-me (Architectural Stress-Testing)
+When the user types `/drill-me` followed by a topic or code context:
+1. Act as a Principal AI Engineer and Security/QA Auditor.
+2. Conduct an uncompromising stress-test of the proposed architecture/code.
+3. Identify top 5 critical failure points across:
+   - Edge cases & bad input handling (e.g., corrupted images, non-standard handwriting layout).
+   - LLM Hallucinations in scoring & criteria evaluation.
+   - External service failures (Qdrant timeout, Notion Rate Limits, OpenAI API 5xx).
+   - Data validation mismatches (Pydantic parsing errors).
+4. Provide concrete code patches or architectural fixes for each identified flaw.
+
+## Methodology: Test-Driven Development (TDD)
+- Always write Pydantic schemas and test cases before implementing core business logic.
+- Ensure all API endpoints have mock unit tests for both successful payload processing and edge-case failures.
