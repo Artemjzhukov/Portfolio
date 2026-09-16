@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    container_name: english-tutor
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /app/data/tutor.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
