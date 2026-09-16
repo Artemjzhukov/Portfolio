@@ -1,4 +1,5 @@
 services:
+  # Векторная база данных Qdrant
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -15,10 +16,36 @@ services:
     environment:
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
-      # Модель эмбеддингов скачивается с HuggingFace при первом запуске;
-      # для офлайн-запуска примонтируйте кэш ~/.cache/huggingface.
+    volumes:
+      # Кэш эмбеддинг-модели: без него модель скачивается с HuggingFace
+      # при каждом пересоздании контейнера.
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       - qdrant
+  # Добавляем n8n
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_orchestrator
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      # Переменные для связи с FastAPI.
+      # ВАЖНО: имя хоста = имя сервиса в этом compose-файле ("assessment"),
+      # а не "fastapi_app".
+      - PYTHON_SERVICE_URL=http://assessment:8000
+    volumes:
+      - n8n_data:/home/node/.n8n
 
 volumes:
   qdrant_data:
+  n8n_data:
+  hf_cache:
+
+networks:
+  app-network:
+    driver: bridge

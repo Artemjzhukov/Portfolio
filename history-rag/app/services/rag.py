@@ -42,16 +42,35 @@ class TheoryRetriever:
     # ------------------------------------------------------------------
 
     def _ensure_ready(self) -> bool:
-        if self._ready is not None:
-            return self._ready
+        """Ленивая инициализация. Отрицательный результат НЕ кэшируется навсегда:
+        первый вызов может случиться раньше готовности Qdrant (race с depends_on),
+        поэтому следующая попытка повторяется, а не блокируется до рестарта."""
+        if self._ready:
+            return True
         try:
             from langchain_community.embeddings import HuggingFaceEmbeddings
             from langchain_qdrant import QdrantVectorStore
             from qdrant_client import QdrantClient
+            from qdrant_client.http.models import Distance, VectorParams
 
             embeddings = HuggingFaceEmbeddings(model_name=self.s.embedding_model)
             client = QdrantClient(host=self.s.qdrant_host, port=self.s.qdrant_port)
             client.get_collections()
+
+            # Чистый volume (первый запуск compose) -> коллекции нет -> 404 при
+            # инициализации стора. Создаём сами, как core/database.py.
+            if not client.collection_exists(self.s.qdrant_collection):
+                dim = len(embeddings.embed_query("dimension probe"))
+                client.create_collection(
+                    collection_name=self.s.qdrant_collection,
+                    vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+                )
+                logger.info(
+                    "Коллекция '%s' создана (dim=%d). Пустая — залейте корпус материала "
+                    "(core/database.add_documents_to_store), иначе рекомендации будут пустыми.",
+                    self.s.qdrant_collection, dim,
+                )
+
             self._store = QdrantVectorStore(
                 client=client,
                 collection_name=self.s.qdrant_collection,
@@ -59,12 +78,11 @@ class TheoryRetriever:
             )
             self._ready = True
         except Exception as exc:
-            self._ready = False
             self._unavailable_reason = (
                 f"RAG недоступен (Qdrant {self.s.qdrant_host}:{self.s.qdrant_port}): {exc}"
             )
             logger.warning(self._unavailable_reason)
-        return self._ready
+        return self._ready is True
 
     # ------------------------------------------------------------------
 

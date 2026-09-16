@@ -1,0 +1,18 @@
+# Lean runtime-only requirements для Docker-образа (python:3.11-slim).
+# Не включает: Windows-only пакеты (pywin32), тесты (pytest), dev-freeze
+# (chromadb, langgraph, ollama, scikit-learn, sympy и пр.).
+# torch ставится отдельно в Dockerfile (--index-url download.pytorch.org/whl/cpu),
+# иначе sentence-transformers на linux тянет CUDA-сборку (~2.5 ГБ).
+fastapi==0.141.1
+uvicorn==0.49.0
+httpx==0.28.1
+pydantic==2.13.4
+pydantic-settings==2.14.1
+python-dotenv==1.2.2
+pypdf==6.18.1
+python-docx==1.2.0
+openai==2.43.0
+qdrant-client==1.18.0
+langchain-community==0.4.2
+langchain-qdrant==1.1.0
+sentence-transformers==5.5.1

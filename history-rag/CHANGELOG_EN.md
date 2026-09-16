@@ -141,9 +141,44 @@ Decision: use OpenRouter keys. Implemented:
 
 ---
 
+### 5.2 Docker: `docker compose up -d` fixed
+Three causes of the failed build/startup:
+1. **`requirements.txt` was UTF-16 encoded** (created via PowerShell) — pip
+   could not parse it (`exit code 1` on `pip install`). Rewritten as UTF-8.
+2. **`pywin32` in the list** — Windows-only package, cannot install into a
+   Linux container. Added the `; sys_platform == "win32"` marker.
+3. **The full dev freeze baked into the image** — replaced by
+   `requirements-docker.txt` (runtime-only); `torch` is installed as the
+   CPU build (`--index-url download.pytorch.org/whl/cpu`) instead of the
+   CUDA one (~2.5 GB saved).
+
+Plus launch fixes:
+- **`EMBEDDING_MODEL=nomic-embed-text` in `.env`** — that is an *Ollama*
+  model name; no such HuggingFace repo exists (401 / Repository Not Found).
+  Restored `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` —
+  the same model the corpus was built with (otherwise the vector dimension
+  would not match the collection).
+- **`rag.py`: an empty collection no longer breaks RAG** — if `history_docs`
+  is missing it is created automatically (with the right dimension);
+  `qdrant_ready: true` on an empty base is correct — recommendations simply
+  return "no materials found" until the corpus is loaded.
+- **`rag.py`: a negative readiness result is no longer cached forever** —
+  the first `/health` call before Qdrant is ready no longer sticks until a
+  container restart (race with `depends_on`).
+- **`docker-compose.yml`** (the user's own n8n service kept):
+  `PYTHON_SERVICE_URL=http://fastapi_app:8000` → `http://assessment:8000`
+  (the host must equal the compose service name); added an `hf_cache` volume
+  for the embedding-model cache (otherwise it re-downloads on every recreate).
+- Verified live: `docker compose up -d` → health `qdrant_ready: true`,
+  the `history_docs` collection is created (empty), end-to-end smoke test
+  through the container — 2/3 (66.7%).
+
+---
+
 ## Current State
 
-- **84 tests** (`pytest tests -q`), LLM always mocked, live smoke test OK.
+- **84 tests** (`pytest tests -q`), LLM always mocked, live smoke test OK
+  (including the Docker container).
 - Commit history: `5ffb6fd` → `6c2968a` → `b3d2c24` → `825c759` → (current).
 - All report messages, prompts and deduction reasons are in Russian.
 
