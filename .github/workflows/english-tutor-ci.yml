@@ -1,12 +1,21 @@
-name: CI
+name: English Tutor CI
 
 on:
   push:
+    paths:
+      - "English-tutor/**"
+      - ".github/workflows/english-tutor-ci.yml"
   pull_request:
+    paths:
+      - "English-tutor/**"
+      - ".github/workflows/english-tutor-ci.yml"
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: English-tutor
 
     steps:
       - name: Checkout repository
