@@ -122,9 +122,23 @@ FastAPI-сервис в `app/`: принимает работу ученика �
   "submission_type": "standard_test",    // "standard_test" | "ege_exam"
   "subject_id": "history",               // имя папки рубрик в data/criteria/
   "student_id": "tg_12345",              // telegram_chat_id
-  "answer_key": {"1": "3", "2": "5"}     // обязателен для standard_test; для EGE закрывает часть 1
+  "answer_key": {"1": "3", "2": "5"}     // ОПЦИОНАЛЬНО: переопределяет эталоны из data/answer_keys/{subject_id}.json
 }
 ```
+
+Эталонные ответы могут храниться в сервисе: `data/answer_keys/{subject_id}.json`:
+
+```json
+{
+  "schema_version": 1,
+  "subject_id": "history",
+  "answers": {"1": "3", "2": "5", "3": "Александр Второй"}
+}
+```
+
+Приоритет: `payload.answer_key` (явное переопределение) → файл хранилища.
+Если эталонов нет нигде, `standard_test` помечается для ручной проверки,
+а не падает.
 
 Выход — `AssessmentResult`: `total_score`, `max_possible_score`, `percentage`,
 `summary_feedback` (Markdown, русский), `task_breakdown[]` (`status`:

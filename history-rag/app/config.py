@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # --- Оценка ЕГЭ ---
     consistency_votes: int = 1             # >1: медиана из N голосов для спорных критериев
     criteria_dir: Path = Path("data/criteria")
+    answer_keys_dir: Path = Path("data/answer_keys")  # эталоны: {subject_id}.json
 
     # --- RAG-рекомендации ---
     rag_top_k: int = 5

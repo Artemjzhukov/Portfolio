@@ -187,8 +187,11 @@ Plus launch fixes:
 1. ✅ **n8n workflow** — done: `n8n/workflow.json` + README instructions
    (webhook → ack → Wait/poll → Telegram → Notion; error branch to
    `TUTOR_CHAT_ID`). Remaining: bind credentials and activate in n8n.
-2. **Answer-key storage inside the service** (drop `answer_key` from the
-   n8n payload).
+2. ✅ **Answer-key storage inside the service** — `data/answer_keys/{subject}.json`
+   (`AnswerKeyStore`); n8n no longer needs to pass `answer_key` (but may
+   override). Example: `data/answer_keys/history.json`. Precedence:
+   payload > file. No keys anywhere → manual review, not a crash.
+   `job_id` hashes the effective key (editing the file invalidates the cache).
 3. Fill in the official EGE rubrics (tasks 20–27, other subjects).
 4. Optional: `langchain-huggingface` instead of the deprecated
    `langchain-community` embeddings.

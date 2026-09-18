@@ -25,6 +25,7 @@ from app.schemas import (
     JobStatus,
     SubmissionInput,
 )
+from app.services.answer_keys import AnswerKeyStore, resolve_answer_key
 from app.services.checker_ege import EGEEvaluator
 from app.services.llm import OpenAIJSONClient
 from app.services.ocr import ExtractionService
@@ -47,7 +48,13 @@ def _build_pipeline() -> AssessmentPipeline:
         extraction=ExtractionService(llm=OpenAIJSONClient(settings, model=settings.openai_ocr_model), settings=settings),
         ege_evaluator=EGEEvaluator(llm=llm, settings=settings, factcheck=FactChecker(retriever)),
         retriever=retriever,
+        key_store=AnswerKeyStore(settings),
     )
+
+
+@lru_cache
+def _get_key_store(dir_path: str) -> AnswerKeyStore:
+    return AnswerKeyStore(Settings(answer_keys_dir=dir_path))
 
 
 def _authorize(x_api_key: str | None, settings: Settings) -> None:
@@ -139,7 +146,8 @@ def process_submission_async(
     _authorize(x_api_key, settings)
     file_bytes, file_name = _fetch_file(payload, settings)
 
-    job_id = compute_job_id(payload, file_bytes, settings)
+    effective_key = resolve_answer_key(payload, _get_key_store(str(settings.answer_keys_dir)))
+    job_id = compute_job_id(payload, file_bytes, settings, answer_key=effective_key)
     store = _get_job_store(settings.jobs_db_path)
     reused, existing_result = store.create(
         job_id,

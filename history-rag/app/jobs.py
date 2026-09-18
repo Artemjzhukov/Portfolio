@@ -129,19 +129,19 @@ class JobStore:
             self._conn.commit()
 
 
-def compute_job_id(payload, file_bytes: bytes, settings) -> str:
+def compute_job_id(payload, file_bytes: bytes, settings, answer_key=None) -> str:
     """Идемпотентный ключ джобы: ученик + предмет + тип + файл + ключи + рубрики.
 
-    Изменение рубрики инвалидирует кэш — старые результаты не переиспользуются.
+    answer_key — эффективный ключ (payload или хранилище); если None, берётся
+    payload.answer_key. Изменение рубрик/ключей инвалидирует кэш.
     """
+    effective = answer_key if answer_key is not None else (payload.answer_key or {})
     digest = hashlib.sha256()
     digest.update(f"{payload.student_id}|{payload.subject_id}|{payload.submission_type}".encode("utf-8"))
     digest.update(b"|")
     digest.update(hashlib.sha256(file_bytes).digest())
     digest.update(b"|")
-    digest.update(
-        json.dumps(payload.answer_key or {}, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    )
+    digest.update(json.dumps(effective, sort_keys=True, ensure_ascii=False).encode("utf-8"))
     rubric_dir = Path(settings.criteria_dir) / payload.subject_id
     for path in sorted(rubric_dir.glob("task_*.json")):
         digest.update(b"|")

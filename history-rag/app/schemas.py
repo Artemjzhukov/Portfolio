@@ -99,8 +99,8 @@ class SubmissionInput(BaseModel):
     student_id: str = Field(..., min_length=1, description="ID ученика или telegram_chat_id.")
     answer_key: Optional[dict[str, str]] = Field(
         default=None,
-        description="Эталонные ответы: номер задачи -> ответ. Обязателен для standard_test; "
-        "для ege_exam закрывает часть 1 (короткие ответы).",
+        description="Эталонные ответы: номер задачи -> ответ. Опционально: если не заданы, "
+        "берутся из data/answer_keys/{subject_id}.json (файл побеждает только при пустом payload).",
     )
 
     @field_validator("file_bytes")
@@ -118,12 +118,6 @@ class SubmissionInput(BaseModel):
     def exactly_one_file_source(self) -> "SubmissionInput":
         if bool(self.file_url) == bool(self.file_bytes):
             raise ValueError("нужен ровно один источник файла: file_url ИЛИ file_bytes")
-        return self
-
-    @model_validator(mode="after")
-    def standard_test_requires_key(self) -> "SubmissionInput":
-        if self.submission_type == "standard_test" and not self.answer_key:
-            raise ValueError("для standard_test обязателен answer_key (эталонные ответы)")
         return self
 
 
@@ -319,6 +313,17 @@ def derive_status(earned: int, max_points: int) -> TaskStatus:
     if earned > 0:
         return "Partially Correct"
     return "Incorrect"
+
+
+class AnswerKeyFile(BaseModel):
+    """Файл эталонных ответов теста: data/answer_keys/{subject_id}.json."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(default=1, ge=1)
+    subject_id: str = Field(..., min_length=2, pattern=r"^[a-z][a-z_]*$")
+    answers: dict[str, str] = Field(..., description="Номер задачи -> правильный ответ.")
+    note: Optional[str] = Field(default=None, description="Пометка, напр. 'пример, замените реальными ключами'.")
 
 
 class AssessmentResult(BaseModel):

@@ -11,6 +11,7 @@ from app.schemas import (
     TaskBreakdown,
     derive_status,
 )
+from app.services.answer_keys import AnswerKeyStore, resolve_answer_key
 from app.services.checker_ege import EGEEvaluator
 from app.services.checker_test import answers_match, check_standard_test
 from app.services.ocr import ExtractionService
@@ -136,10 +137,12 @@ class AssessmentPipeline:
         extraction: ExtractionService,
         ege_evaluator: EGEEvaluator,
         retriever: TheoryRetriever,
+        key_store: AnswerKeyStore | None = None,
     ) -> None:
         self.extraction = extraction
         self.ege = ege_evaluator
         self.retriever = retriever
+        self.key_store = key_store
 
     def run(
         self,
@@ -164,18 +167,43 @@ class AssessmentPipeline:
                 f"Не удалось привязать к номерам задач {len(extracted.unmatched_segments)} фрагмент(ов)."
             )
 
+        effective_key = resolve_answer_key(payload, self.key_store)
+        key_source = "payload" if payload.answer_key else ("store" if effective_key else "none")
+        logger.info(
+            "%s answer key: %s (%d задач, источник=%s)",
+            ctx, "есть" if effective_key else "нет", len(effective_key), key_source,
+        )
+        needs_review = False
+
         if payload.submission_type == "standard_test":
-            breakdowns, unkeyed = check_standard_test(extracted, payload.answer_key or {})
-            if unkeyed:
+            if not effective_key:
+                keys_dir = self.key_store.s.answer_keys_dir if self.key_store else "data/answer_keys"
                 warnings.append(
-                    f"Задания {unkeyed} есть в работе, но отсутствуют в answer_key — не учтены."
+                    "Эталонные ответы не найдены ни в payload, ни в "
+                    f"{keys_dir}/{payload.subject_id}.json — задания не оценены."
                 )
+                needs_review = True
+                breakdowns = [
+                    TaskBreakdown(
+                        task_number=s.task_number, max_points=1, earned_points=0,
+                        status="Not Submitted", student_answer=s.text,
+                        deduction_reason="Нет эталонных ответов для этого теста",
+                        needs_human_review=True,
+                    )
+                    for s in extracted.segments if s.task_number is not None
+                ]
+            else:
+                breakdowns, unkeyed = check_standard_test(extracted, effective_key)
+                if unkeyed:
+                    warnings.append(
+                        f"Задания {unkeyed} есть в работе, но отсутствуют в answer_key — не учтены."
+                    )
         else:
-            breakdowns = self._run_ege(payload, extracted, warnings)
+            breakdowns = self._run_ege(payload, extracted, warnings, effective_key)
 
         total = sum(b.earned_points for b in breakdowns)
         max_possible = sum(b.max_points for b in breakdowns)
-        needs_review = any(b.needs_human_review for b in breakdowns)
+        needs_review = needs_review or any(b.needs_human_review for b in breakdowns)
         percentage = round(total / max_possible * 100, 1) if max_possible > 0 else 0.0
 
         result_data = {
@@ -199,7 +227,8 @@ class AssessmentPipeline:
         return AssessmentResult.model_validate(result_data)
 
     def _run_ege(
-        self, payload: SubmissionInput, extracted: ExtractedSubmission, warnings: list[str]
+        self, payload: SubmissionInput, extracted: ExtractedSubmission,
+        warnings: list[str], effective_key: dict[str, str],
     ) -> list[TaskBreakdown]:
         rubrics = self.ege.load_rubrics(payload.subject_id)
         if not rubrics:
@@ -207,7 +236,7 @@ class AssessmentPipeline:
                 f"Для предмета '{payload.subject_id}' не найдено ни одной рубрики в "
                 f"{self.ege.s.criteria_dir}/{payload.subject_id} — задания не оценивались."
             )
-        answer_key = payload.answer_key or {}
+        answer_key = effective_key
         segments = {s.task_number: s for s in extracted.segments if s.task_number is not None}
         numeric = set(segments) | set(rubrics) | {int(k) for k in answer_key if str(k).strip().isdigit()}
         all_numbers = sorted(numeric) + [k for k in answer_key if not str(k).strip().isdigit()]

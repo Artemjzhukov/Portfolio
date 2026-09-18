@@ -49,9 +49,10 @@ class TestSubmissionInput:
         with pytest.raises(ValidationError, match="base64"):
             SubmissionInput(**make_input(file_bytes="!!!not-base64!!!"))
 
-    def test_standard_test_requires_answer_key(self):
-        with pytest.raises(ValidationError, match="answer_key"):
-            SubmissionInput(**make_input(answer_key=None))
+    def test_standard_test_answer_key_optional(self):
+        """answer_key больше не обязателен в схеме: эталоны могут прийти из data/answer_keys."""
+        obj = SubmissionInput(**make_input(answer_key=None))
+        assert obj.answer_key is None
 
     def test_bad_subject_id_rejected(self):
         with pytest.raises(ValidationError):

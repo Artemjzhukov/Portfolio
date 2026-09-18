@@ -239,12 +239,18 @@ class TestAPI:
         ))
         assert resp.status_code == 422
 
-    def test_missing_answer_key_422(self, client):
+    def test_answer_key_optional_via_store(self, client, settings, tmp_path, monkeypatch):
+        """answer_key не передаётся — эталоны берутся из data/answer_keys/{subject}.json."""
+        settings.answer_keys_dir = tmp_path
+        (tmp_path / "history.json").write_text(
+            '{"schema_version": 1, "subject_id": "history", "answers": {"1": "3"}}',
+            encoding="utf-8",
+        )
         resp = client.post("/process-submission", json=dict(
-            file_bytes="AAAA", submission_type="standard_test",
+            file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
             subject_id="history", student_id="s1",
         ))
-        assert resp.status_code == 422
+        assert resp.status_code == 200
 
     def test_health(self, client):
         resp = client.get("/health")
