@@ -101,6 +101,31 @@ curl -X POST "http://<n8n>/webhook/exam-submission" \
 # 3. В Telegram: ack → через ~2 мин короткий отчёт + файл; в Notion — страница.
 ```
 
+## Загрузка корпуса в Qdrant (для RAG-рекомендаций)
+
+Скрипт: `scripts/upload_corpus.py` — обходит каталог, извлекает текст
+(.txt/.md/.docx/.pdf), режет на чанки (RecursiveCharacterTextSplitter),
+валидирует и грузит в коллекцию `history_docs`.
+
+```bash
+# проба (без записи):
+python scripts/upload_corpus.py --dir history_database --limit 3 --dry-run
+# загрузка части корпуса:
+python scripts/upload_corpus.py --dir history_database --limit 5
+# загрузка всего + переопределение подключения:
+python scripts/upload_corpus.py --dir D:\\corpus --host localhost --port 6333 --collection history_docs
+```
+
+- Метаданные: `topic` = имя родительской папки, `doc_date` = год из имени файла.
+- Чанки: 800 символов / перекрытие 150 (настраивается).
+- Пример микрокорпуса для проверки: `scripts/sample_corpus/` (реформы
+  Александра II, 2 файла). Проверка поиска после загрузки — `docker cp`
+  `scripts/verify_rag.py` в контейнер и `python /tmp/verify_rag.py`
+  (с `-e PYTHONPATH=/srv -w /srv`).
+- Эмбеддинги — та же модель, что при создании коллекции
+  (`paraphrase-multilingual-MiniLM-L12-v2`); смена модели = пересоздание
+  коллекции (иначе размерность не совпадёт).
+
 ---
 
 # Микросервис оценки работ (EGE & Standard Tests)

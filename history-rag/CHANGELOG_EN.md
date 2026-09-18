@@ -204,6 +204,25 @@ Plus launch fixes:
 Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
 (recommendations start working), real rubric contents, worker scaling.
 
+## Phase 6 — Corpus in Qdrant & live RAG verification
+
+### 6.1 Corpus uploader
+- `scripts/upload_corpus.py`: walks a directory, extracts text
+  (.txt/.md/.docx/.pdf), chunks (RecursiveCharacterTextSplitter, 800/150
+  defaults), attaches metadata (`topic` from the folder, `doc_date` — year
+  from the filename), validates via `HistoricalDocument`, flags `--limit`
+  (partial upload), `--dry-run`, `--host/--port/--collection`.
+- 7 new helper tests (no network). Total **101 tests**.
+
+### 6.2 Verified live on the Docker stack
+- The sample micro-corpus `scripts/sample_corpus/` (Alexander II reforms,
+  2 files) was uploaded to the container Qdrant's `history_docs` collection.
+- Semantic search and `recommend()` through `TheoryRetriever` inside the
+  container return relevant chunks and a ready `recommended_topics`
+  ("Что повторить: …") — the workflow's RAG loop works.
+- Left to the user: point `--dir` at the real corpus and load it fully;
+  replace TEMPLATE rubrics with official ones.
+
 ## Known Limitations
 
 - Vision OCR of handwriting requires a vision-capable model (OpenRouter:
