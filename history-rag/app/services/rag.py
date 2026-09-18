@@ -48,7 +48,12 @@ class TheoryRetriever:
         if self._ready:
             return True
         try:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
+            # Предпочитаем поддерживаемый пакет (community-вариант deprecated);
+            # fallback для окружений, где langchain-huggingface не установлен.
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+            except ImportError:
+                from langchain_community.embeddings import HuggingFaceEmbeddings
             from langchain_qdrant import QdrantVectorStore
             from qdrant_client import QdrantClient
             from qdrant_client.http.models import Distance, VectorParams

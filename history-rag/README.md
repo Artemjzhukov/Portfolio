@@ -190,8 +190,44 @@ GET  /results/{job_id}                  # {"status": "queued|running|done|error"
 Формат — `TaskRubric` из `app/schemas.py`. Инварианты, проверяемые Pydantic:
 `sum(criteria.max_points) == max_points`, у каждого критерия ровно одна
 ступень с `points == max_points` и одна с `points == 0`, уникальные `K*`-ID.
-Включённые файлы (`history/task_19.json`, `social_studies/task_24.json`) —
-**примеры**: перед продакшеном замените официальными рубриками нужного года.
+
+В комплекте: `history/task_19.json`, `social_studies/task_24.json` — рабочие
+примеры; `history/task_18.json` (аргументация), `task_20.json` (анализ
+ситуации), `task_21.json` (сравнение) — **шаблоны** (`"year_variant": "TEMPLATE"`,
+пометка в `note`): сверьте ступени с официальной рубрикой ФИПИ нужного года.
+
+**Как добавить задание 22–27** (скопируйте и заполните):
+
+```json
+{
+  "schema_version": 1,
+  "subject_id": "history",
+  "task_number": 22,
+  "year_variant": "2025",
+  "max_points": 2,
+  "part": 2,
+  "criteria": [
+    {
+      "criterion_id": "K1",
+      "title_ru": "Название критерия",
+      "description_ru": "Что должен сделать ученик.",
+      "max_points": 1,
+      "deduction_ladder": [
+        {"points": 0, "condition_ru": "Когда ставится 0"},
+        {"points": 1, "condition_ru": "Когда ставится 1"}
+      ],
+      "factcheck_topics": []
+    }
+  ]
+}
+```
+
+Правила: имя файла `task_{N}.json` в папке предмета; сумма
+`criteria[].max_points` строго равна `max_points`; каждая ступень — дискретный
+балл из официальной шкалы. Все файлы автоматически проверяются тестом
+`TestAllRubricsOnDisk` (инварианты + лестницы) — запустите `pytest` после
+добавления. `factcheck_topics` — темы для RAG-фактчека: заполняйте, если
+критерий может быть нарушен фактической ошибкой (дата, событие, личность).
 
 ## Запуск
 

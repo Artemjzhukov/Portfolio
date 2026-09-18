@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "subject_id": "history",
+  "task_number": 20,
+  "year_variant": "TEMPLATE",
+  "max_points": 2,
+  "part": 2,
+  "note": "ШАБЛОН — сверить с официальной рубрикой ФИПИ нужного года. Анализ исторической ситуации.",
+  "criteria": [
+    {
+      "criterion_id": "K1",
+      "title_ru": "Характеристика ситуации",
+      "description_ru": "Верно охарактеризована заданная историческая ситуация (время, суть, участники).",
+      "max_points": 1,
+      "deduction_ladder": [
+        {"points": 0, "condition_ru": "Ситуация не охарактеризована или охарактеризована неверно"},
+        {"points": 1, "condition_ru": "Ситуация охарактеризована верно"}
+      ],
+      "factcheck_topics": []
+    },
+    {
+      "criterion_id": "K2",
+      "title_ru": "Причины и/или последствия",
+      "description_ru": "Указаны причины и/или последствия рассматриваемой ситуации с опорой на факты.",
+      "max_points": 1,
+      "deduction_ladder": [
+        {"points": 0, "condition_ru": "Причины/последствия не указаны или указаны неверно"},
+        {"points": 1, "condition_ru": "Причины/последствия указаны корректно"}
+      ],
+      "factcheck_topics": []
+    }
+  ]
+}

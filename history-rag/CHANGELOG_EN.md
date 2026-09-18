@@ -192,9 +192,17 @@ Plus launch fixes:
    override). Example: `data/answer_keys/history.json`. Precedence:
    payload > file. No keys anywhere → manual review, not a crash.
    `job_id` hashes the effective key (editing the file invalidates the cache).
-3. Fill in the official EGE rubrics (tasks 20–27, other subjects).
-4. Optional: `langchain-huggingface` instead of the deprecated
-   `langchain-community` embeddings.
+3. ✅ **EGE rubric templates** — `history/task_18.json` (argumentation, 3 pts),
+   `task_20.json` (situation analysis, 2 pts), `task_21.json` (comparison,
+   2 pts); marked `year_variant: TEMPLATE` + `note` — verify steps against
+   the official FIPI rubric. "How to add 22–27" guide in README; test
+   `TestAllRubricsOnDisk` validates every file automatically.
+4. ✅ **`langchain-huggingface`** — rag.py prefers the maintained package
+   (community fallback), deprecation warnings gone; package added to
+   requirements (+docker).
+
+Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
+(recommendations start working), real rubric contents, worker scaling.
 
 ## Known Limitations
 

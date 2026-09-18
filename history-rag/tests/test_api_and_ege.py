@@ -7,11 +7,30 @@ from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.main import app
+from app.schemas import TaskRubric
 from app.services.checker_ege import EGEEvaluator
 from app.services.pipeline import AssessmentPipeline
 from app.services.rag import TheoryRetriever
 
 from tests.conftest import FakeLLM
+
+
+class TestAllRubricsOnDisk:
+    """Каждый JSON в data/criteria/** обязан проходить все инварианты TaskRubric."""
+
+    def test_all_rubrics_valid(self):
+        from pathlib import Path
+
+        files = sorted(Path("data/criteria").glob("*/*.json"))
+        assert files, "нет ни одного файла рубрик"
+        for path in files:
+            rubric = TaskRubric.model_validate_json(path.read_text(encoding="utf-8"))
+            assert rubric.max_points > 0
+            for crit in rubric.criteria:
+                pts = {s.points for s in crit.deduction_ladder}
+                assert crit.max_points in pts, path
+                assert 0 in pts, path
+
 
 
 def ege_payload(answer=None):
@@ -149,8 +168,18 @@ class TestPipelineEGE:
             retriever=TheoryRetriever(settings),
         )
 
-    def test_rubric_and_key_tasks_combined(self, settings):
+    def test_rubric_and_key_tasks_combined(self, settings, tmp_path):
         from app.schemas import ExtractedSubmission, OCRSegment, SubmissionInput
+
+        # изолируем набор рубрик (в data/criteria/history теперь 18, 19, 20, 21)
+        import shutil
+
+        settings.criteria_dir = tmp_path / "criteria"
+        (settings.criteria_dir / "history").mkdir(parents=True)
+        shutil.copy(
+            "data/criteria/history/task_19.json",
+            settings.criteria_dir / "history" / "task_19.json",
+        )
 
         fake = FakeLLM([llm_verdict(k1_points=1, k2_points=1)])
         pipeline = self._pipeline(settings, fake)
