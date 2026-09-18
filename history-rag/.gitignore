@@ -2,9 +2,10 @@
 __pycache__/
 history_database/
 .history/
-# большие данные не в git, но рубрики ЕГЭ (маленькие JSON) нужны в репозитории
+# большие данные не в git, но рубрики ЕГЭ и эталоны ответов (маленькие JSON) нужны в репозитории
 data/*
 !data/criteria/
+!data/answer_keys/
 .env
 .pytest_cache/
 assessment_jobs.db
