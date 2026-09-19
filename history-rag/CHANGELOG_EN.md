@@ -223,6 +223,17 @@ Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
 - Left to the user: point `--dir` at the real corpus and load it fully;
   replace TEMPLATE rubrics with official ones.
 
+### 6.3 Docker context & CI
+- **`.dockerignore`** — the build context used to ship `.venv` and `.history`
+  (gigabytes) to the daemon. The image now receives only what it needs
+  (`core/`, `app/`, `data/`, `requirements-docker.txt`); rebuilds are much
+  faster. Verified: `docker compose build` succeeds with the new ignore.
+- **GitHub Actions CI** (`.github/workflows/history-rag-tests.yml`): on
+  push/PR touching `history-rag/**` — CPU-torch + `requirements-docker.txt`
+  + pytest install, full test run (ubuntu-latest, python 3.11, pip cache,
+  20-minute timeout).
+- Rebuilt the image and ran the full suite locally: **101 tests green**.
+
 ## Known Limitations
 
 - Vision OCR of handwriting requires a vision-capable model (OpenRouter:

@@ -217,6 +217,17 @@
   (`--dir …`) и загрузить его целиком; заменить TEMPLATE-рубрики на
   официальные.
 
+### 6.3 Docker-контекст и CI
+- **`.dockerignore`** — build-контекст раньше отправлял в демон `.venv` и
+  `.history` (гигабайты). Теперь в образ попадают только нужные файлы
+  (`core/`, `app/`, `data/`, `requirements-docker.txt`); пересборка заметно
+  быстрее. Проверено: `docker compose build` успешно с новым ignore.
+- **GitHub Actions CI** (`.github/workflows/history-rag-tests.yml`): на
+  push/PR с изменениями в `history-rag/**` — установка CPU-torch +
+  `requirements-docker.txt` + pytest, запуск всех тестов (ubuntu-latest,
+  python 3.11, pip-кэш, timeout 20 мин).
+- Локально пересобран образ и прогнан полный набор: **101 тест зелёный**.
+
 ## Известные ограничения
 
 - Vision OCR рукописей требует модель с Vision (OpenRouter: gpt-4o /

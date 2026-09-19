@@ -1,0 +1,24 @@
+# Не отправлять в build-контекст Docker: контекст сейчас гигабайты.
+.venv/
+.history/
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+*.db
+.env
+.env.example
+.gitignore
+history_database/
+tests/
+scripts/
+main.py
+README.md
+CHANGELOG.md
+CHANGELOG_EN.md
+.clinerules
+n8n/
+requirements.txt
