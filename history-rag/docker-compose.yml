@@ -20,6 +20,8 @@ services:
       # Кэш эмбеддинг-модели: без него модель скачивается с HuggingFace
       # при каждом пересоздании контейнера.
       - hf_cache:/root/.cache/huggingface
+      # Иллюстрации корпуса: host ./data/media <-> контейнер (раздаются по /media)
+      - ./data/media:/srv/data/media
     depends_on:
       - qdrant
   # Добавляем n8n

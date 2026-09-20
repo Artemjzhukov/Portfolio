@@ -9,6 +9,7 @@ from functools import lru_cache
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,6 +38,11 @@ app = FastAPI(
     description="Оценка работ учеников (ЕГЭ и стандартные тесты) для n8n -> Notion/Telegram.",
     version="0.1.0",
 )
+
+# Раздача иллюстраций корпуса (фото людей, карты) по HTTP: /media/<topic>/<file>
+_media_settings = get_settings()
+_media_settings.media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(_media_settings.media_dir)), name="media")
 
 
 @lru_cache

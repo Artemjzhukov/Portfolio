@@ -274,6 +274,9 @@ class RAGChunk(BaseModel):
     source: Optional[str] = None
     topic: Optional[str] = None
     score: float = Field(default=0.0, ge=0.0, le=1.0)
+    image: Optional[str] = Field(
+        default=None, description="Относительный путь к изображению (data/media), если чанк — иллюстрация."
+    )
 
 
 class RAGRecommendation(BaseModel):

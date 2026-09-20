@@ -111,9 +111,15 @@ class TheoryRetriever:
                     source=doc.metadata.get("source"),
                     topic=doc.metadata.get("topic"),
                     score=max(0.0, min(1.0, similarity)),
+                    image=doc.metadata.get("image"),
                 )
             )
         return chunks
+
+    @staticmethod
+    def image_url(public_base: str, image_path: str) -> str:
+        """Ссылка на изображение: {public_media_url}/{path} или относительный путь."""
+        return f"{public_base.rstrip('/')}/{image_path}" if public_base else image_path
 
     def recommend(self, subject_id: str, task_number, query_text: str) -> RAGRecommendation:
         """Рекомендации для задачи, где потеряны баллы."""
@@ -130,6 +136,10 @@ class TheoryRetriever:
                 where = c.topic or c.source or "материалы курса"
                 excerpt = " ".join(c.text.split())[:180]
                 lines.append(f"- {where}: {excerpt}…")
+                if c.image:
+                    lines.append(
+                        f"  🖼 Иллюстрация: {self.image_url(self.s.public_media_url, c.image)}"
+                    )
             rec.recommended_topics = "\n".join(lines)
         else:
             rec.recommended_topics = (

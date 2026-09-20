@@ -223,6 +223,25 @@ Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
 - Left to the user: point `--dir` at the real corpus and load it fully;
   replace TEMPLATE rubrics with official ones.
 
+### 6.4 Images in the corpus (people photos, maps) — no OCR
+- **Storage decision:** Qdrant stores the vector + caption + payload with an
+  `image` field (relative path); the files themselves are copied to
+  `data/media/<topic>/` and served by the service over HTTP (`/media/...`,
+  StaticFiles). On a VPS: same layout + `PUBLIC_MEDIA_URL` for absolute
+  links in reports.
+- `upload_corpus.py --images`: jpg/jpeg/png/webp (HEIC — convert first),
+  metadata from folder/filename (no OCR, no EXIF — as agreed), the embedding
+  caption comes from a `captions.json` next to the photo or falls back to
+  topic + filename.
+- `HistoricalDocument.image`, `RAGChunk.image`, `TheoryRetriever.image_url`;
+  `recommended_topics` gains a "🖼 Иллюстрация: <link>" line.
+- compose: bind mount `./data/media:/srv/data/media`.
+- Verified live: a sample Crimea map was uploaded, search returns the
+  captioned chunk, `recommended_topics` contains the illustration link,
+  `GET /media/...` serves the file (200) for both ASCII and Cyrillic paths.
+- 4 new tests + fixes (BOM in captions.json — utf-8-sig). Total
+  **105 tests green**.
+
 ### 6.3 Docker context & CI
 - **`.dockerignore`** — the build context used to ship `.venv` and `.history`
   (gigabytes) to the daemon. The image now receives only what it needs

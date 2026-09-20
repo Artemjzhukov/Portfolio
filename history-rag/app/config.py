@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     rag_top_k: int = 5
     rag_min_score: float = 0.35            # ниже — чанк считается нерелевантным
 
+    # --- Медиа (фото людей/карты в корпусе) ---
+    media_dir: Path = Path("data/media")   # сюда upload_corpus копирует изображения
+    public_media_url: str = Field(
+        default="",
+        description="Публичный базовый URL для ссылок на изображения, напр. http://localhost:8000/media. "
+        "Пусто — в отчётах используется относительный путь.",
+    )
+
     # --- API ---
     api_key: str = ""                      # shared secret для n8n; пусто = авторизация выключена
     jobs_db_path: str = "assessment_jobs.db"  # SQLite store джоб (idempotency/аудит)

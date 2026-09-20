@@ -33,6 +33,11 @@ class HistoricalDocument(BaseModel):
         default=None,
         description="Date the source material refers to (free text — historical dates vary in precision, e.g. '1861' or 'circa 1860s').",
     )
+    image: Optional[str] = Field(
+        default=None,
+        description="Относительный путь к изображению в data/media (напр. 'reforms/portret.jpg'). "
+        "Для фото/карт: вектор строится по подписи, файл лежит отдельно и раздаётся через /media.",
+    )
 
     @field_validator("content")
     @classmethod
@@ -165,6 +170,7 @@ def add_documents_to_store(raw_documents: List[dict]) -> None:
                 "source": doc.source,
                 "topic": doc.topic,
                 "date": doc.doc_date,
+                "image": doc.image,
             },
         )
         for doc in validated
