@@ -184,7 +184,7 @@ async def test_lesson_flow_accepts_voice_answer(conn, st, monkeypatch):
     msg2.bot = FakeBot()
 
     async def fake_transcribe(message, bot, llm):
-        return "Went"
+        return "1"
 
     monkeypatch.setattr(voice_mod, "save_and_transcribe", fake_transcribe)
     await lessons_h.lesson_flow(msg2, st, conn, FakeLLMLections(RAW))
@@ -228,15 +228,23 @@ async def test_lesson_completion_adds_vocab_and_progress(conn, st):
     msg = FakeMessage(tg_id=42, text="1")  # curriculum topic #1 for A2
     await lessons_h.lessons_cmd(msg, st, conn)
     await lessons_h.lesson_flow(msg, st, conn, FakeLLMLections())
-    for answer in ("went", "she bought bread", "watched"):
+    answers = (
+        "1",
+        "went",
+        "didn't see",
+        "She bought bread yesterday",
+        "I got stuck in traffic yesterday",
+        "We had a great time two days ago",
+    )
+    for answer in answers:
         await lessons_h.lesson_flow(FakeMessage(tg_id=42, text=answer), st, conn, FakeLLMLections())
 
     # vocab of the lesson entered the learner's SRS deck
     words = {r["word_en"] for r in conn.execute("SELECT word_en FROM srs_cards")}
-    assert {"word1", "word8"} <= words
-    # K1: progress row with score = 3 correct answers
+    assert {"chunk 1", "chunk 8"} <= words
+    # K1: progress row with score = 6 correct answers
     row = conn.execute("SELECT * FROM lesson_progress").fetchone()
-    assert row is not None and row["status"] == "completed" and row["score"] == 3
+    assert row is not None and row["status"] == "completed" and row["score"] == 6
     assert st.state is None  # lesson flow finished
 
 

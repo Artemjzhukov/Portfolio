@@ -8,7 +8,8 @@ class LessonFormatError(Exception):
     pass
 
 
-_EXERCISE_KEYS = {"type", "prompt", "answer", "hint_ru"}
+_EXERCISE_KEYS = {"type", "instruction_ru", "prompt", "answer", "hint_ru"}
+_ALLOWED_TYPES = {"choice", "fill_in", "translate", "shadowing"}
 
 
 def parse_lesson(raw: dict) -> dict:
@@ -24,14 +25,14 @@ def parse_lesson(raw: dict) -> dict:
     if not isinstance(raw["voice_task"], str) or not raw["voice_task"].strip():
         raise LessonFormatError("voice_task must be a non-empty string")
     exercises = raw["exercises"]
-    if not isinstance(exercises, list) or not 3 <= len(exercises) <= 5:
-        raise LessonFormatError("exercises must be a list of 3-5 items")
+    if not isinstance(exercises, list) or not 5 <= len(exercises) <= 7:
+        raise LessonFormatError("exercises must be a list of 5-7 items")
     for ex in exercises:
         if not isinstance(ex, dict) or not _EXERCISE_KEYS <= set(ex):
             raise LessonFormatError(f"bad exercise keys: {ex}")
-        if ex["type"] not in {"fill_in", "translate"}:
+        if ex["type"] not in _ALLOWED_TYPES:
             raise LessonFormatError(f"bad exercise type: {ex['type']}")
-        for k in ("prompt", "answer", "hint_ru"):
+        for k in ("instruction_ru", "prompt", "answer", "hint_ru"):
             if not isinstance(ex[k], str) or not ex[k].strip():
                 raise LessonFormatError(f"exercise.{k} must be a non-empty string")
     vocab = raw["vocab"]
@@ -77,12 +78,32 @@ def get_or_create_lesson(conn, llm, *, level: str, topic: str, kind: str,
     return lesson
 
 
+def format_exercise_prompt(ex: dict, idx: int) -> str:
+    instr = ex.get("instruction_ru", "").strip()
+    prompt = ex.get("prompt", "").strip()
+    return f"Задание {idx}:\n👉 {instr}\n\n{prompt}"
+
+
 def format_lesson(lesson: dict) -> str:
-    lines = [f"📖 {lesson['title']}", "", "📚 Объяснение:", lesson["explanation_ru"], "",
-             "✏️ Упражнения (пиши ответ текстом или голосом):"]
+    lines = [
+        f"📖 {lesson['title']}",
+        "",
+        "📚 Объяснение:",
+        lesson["explanation_ru"],
+        "",
+        "🎯 Программа тренировки:",
+    ]
     for i, ex in enumerate(lesson["exercises"], 1):
-        lines.append(f"{i}. {ex['prompt']}")
-    lines += ["", "🎤 Голосовое задание:", lesson["voice_task"]]
+        lines.append(f"{i}. [{ex['type']}] {ex['instruction_ru']}")
+    lines += [
+        "",
+        "🎤 Финальное задание на говорение:",
+        lesson["voice_task"],
+        "",
+        "💡 Начнем с первого задания:",
+        "",
+        format_exercise_prompt(lesson["exercises"][0], 1),
+    ]
     return "\n".join(lines)
 
 

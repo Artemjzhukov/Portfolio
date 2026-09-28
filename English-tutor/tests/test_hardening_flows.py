@@ -78,8 +78,17 @@ async def test_long_lesson_sent_in_multiple_chunks(conn, st, monkeypatch):
     long_lesson = {
         "title": "Past Simple",
         "explanation_ru": "объяснение " * 600,  # ~7000 chars
-        "exercises": [{"type": "fill_in", "prompt": f"p{i}", "answer": "a",
-                       "hint_ru": "h", "accept": []} for i in range(4)],
+        "exercises": [
+            {
+                "type": "fill_in",
+                "instruction_ru": "Напиши пропущенное слово:",
+                "prompt": f"p{i}",
+                "answer": "a",
+                "hint_ru": "h",
+                "accept": [],
+            }
+            for i in range(5)
+        ],
         "voice_task": "расскажи",
         "vocab": [{"en": f"w{i}", "ru": f"с{i}"} for i in range(8)],
     }

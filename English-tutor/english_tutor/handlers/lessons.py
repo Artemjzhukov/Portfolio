@@ -157,10 +157,12 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
     nxt = data["ex_idx"] + 1
     if nxt < len(data["lesson"]["exercises"]):
         await state.update_data(ex_idx=nxt, correct=data["correct"])
-        await message.answer(data["lesson"]["exercises"][nxt]["prompt"])
+        next_ex = data["lesson"]["exercises"][nxt]
+        await message.answer(lessons.format_exercise_prompt(next_ex, nxt + 1))
     else:
         # lesson complete: vocab → SRS deck, K1 progress row
-        for w in data["lesson"].get("vocab", []):
+        vocab_items = data["lesson"].get("vocab", [])
+        for w in vocab_items:
             srs.ensure_card(conn, message.from_user.id, w["en"], w["ru"])
         meta = data.get("meta", {})
         lesson_id = lessons.find_lesson_id(
@@ -169,7 +171,13 @@ async def lesson_flow(message, state: FSMContext, conn, llm):
         )
         if lesson_id:
             db.record_progress(conn, message.from_user.id, lesson_id, "completed", data["correct"])
-        await message.answer("Урок пройден! /lessons — следующая тема, /drill — задание на говорение.")
+        finish_text = (
+            f"🎉 Урок пройден! Результат: {data['correct']}/{len(data['lesson']['exercises'])}\n\n"
+            f"💡 В твой словарь повторения (/review) добавлено {len(vocab_items)} выражений.\n"
+            f"🎤 Финальное разговорное задание:\n{data['lesson']['voice_task']}\n\n"
+            "Наговори голосовое в ответ или выбери следующий шаг: /lessons, /drill, /chat."
+        )
+        await message.answer(finish_text)
         await state.clear()
 
 
