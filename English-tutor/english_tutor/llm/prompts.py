@@ -33,3 +33,34 @@ def build_lesson_user_prompt(level: str, topic: str) -> str:
         f"Generate a lesson for CEFR level {level} on the topic: '{topic}'. "
         f"The learner is a Russian speaker. Keep vocabulary and grammar strictly at {level}."
     )
+
+
+STORY_SYSTEM_PROMPT = (
+    "You are an expert English tutor creating an adaptive "
+    "'i+1 Mini-Story' for a Russian-speaking learner.\n"
+    "Pedagogical requirements:\n"
+    "1. Story length: 100 to 150 words.\n"
+    "2. Language balance: 85-90% simple, natural everyday English matching the requested CEFR level, "
+    "and 10-15% target lexical chunks (highlighted in **bold** in the story text).\n"
+    "3. Incorporate recycled vocabulary items seamlessly into the plot.\n"
+    "4. Return STRICT JSON with no markdown outside the JSON.\n\n"
+    "JSON Schema:\n"
+    "- 'title': str\n"
+    "- 'text_en': str (100-150 words, target chunks in **bold**)\n"
+    "- 'glossary': list of 2-4 items, each {'en': str, 'ru': str}\n"
+    "- 'comprehension_questions': list of 2 questions checking text comprehension, each:\n"
+    "  {'q': str, 'options': ['1. option A', '2. option B'], 'answer': '1'|'2', 'hint_ru': str}\n"
+    "- 'retell_prompt': str (Russian prompt asking to retell "
+    "the story in 3-4 sentences using the target chunk)\n"
+    "- 'target_chunk': str (one primary chunk that must be used in the retell)"
+)
+
+
+def build_story_user_prompt(level: str, topic: str, recycling_words: list[str]) -> str:
+    recycled_str = ", ".join(recycling_words) if recycling_words else "none specified"
+    return (
+        f"Create an i+1 mini-story for CEFR level {level}.\n"
+        f"Topic / Context: {topic}\n"
+        f"Vocabulary to recycle and weave into the story: {recycled_str}."
+    )
+

@@ -27,7 +27,7 @@ uv run python -m english_tutor.main
 ## Команды
 
 - Админ: `/invite`, `/approve <tg_id> [A2|B1|B2]`, `/students`
-- Студент: `/start` (код приглашения → тест), `/lessons` (уроки + свободные темы),
+- Студент: `/start` (код приглашения → тест), `/lessons` (уроки + свободные темы), `/story` (i+1 история + пересказ),
   `/drill` (задание на говорение), `/review` (повторение слов), `/chat` (разговор с исправлениями),
   `/mylevel` (твой уровень и прогресс), `/cancel` (выйти из любого режима)
 - Админ также: `/stats` (обзор всех), `/stats <tg_id>` (детально: слабые места, точность, неделя)
@@ -37,6 +37,6 @@ uv run python -m english_tutor.main
 ## Качество
 
 ```bash
-uv run pytest -v          # 135 tests
+uv run pytest -v          # 171 tests
 uv run ruff check .       # lint
 ```

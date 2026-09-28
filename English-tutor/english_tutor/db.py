@@ -80,6 +80,23 @@ CREATE TABLE IF NOT EXISTS srs_reviews (
     day TEXT NOT NULL,
     correct INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS stories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER REFERENCES students(tg_id),
+    level TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS story_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(tg_id),
+    story_id INTEGER NOT NULL REFERENCES stories(id),
+    questions_score INTEGER NOT NULL,
+    retell_transcript TEXT,
+    retell_passed INTEGER NOT NULL DEFAULT 1,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -186,6 +203,32 @@ def mark_reminder_sent(conn, student_id, day, slot):
         (student_id, day, slot),
     )
     conn.commit()
+
+
+def save_story(conn, student_id: int | None, level: str, topic: str, content_json: str) -> int:
+    cur = conn.execute(
+        "INSERT INTO stories (student_id, level, topic, content_json) VALUES (?, ?, ?, ?)",
+        (student_id, level, topic, content_json),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_story(conn, story_id: int):
+    return conn.execute("SELECT * FROM stories WHERE id=?", (story_id,)).fetchone()
+
+
+def record_story_progress(conn, student_id: int, story_id: int, questions_score: int,
+                          retell_transcript: str, retell_passed: bool = True):
+    cur = conn.execute(
+        "INSERT INTO story_progress "
+        "(student_id, story_id, questions_score, retell_transcript, retell_passed) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (student_id, story_id, questions_score, retell_transcript, 1 if retell_passed else 0),
+    )
+    conn.commit()
+    return cur.lastrowid
+
 
 
 def bump_usage(conn, student_id, day: str | None = None) -> int:

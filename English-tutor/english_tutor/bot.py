@@ -1,7 +1,7 @@
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from english_tutor.handlers import admin, chat, errors, lessons, registration, review
+from english_tutor.handlers import admin, chat, errors, lessons, registration, review, stories
 
 
 def create_dispatcher(config, conn, llm) -> Dispatcher:
@@ -11,6 +11,7 @@ def create_dispatcher(config, conn, llm) -> Dispatcher:
     dp.include_router(lessons.router)
     dp.include_router(review.router)
     dp.include_router(chat.router)
+    dp.include_router(stories.router)
     dp.include_router(errors.router)
     dp.workflow_data.update(conn=conn, llm=llm, admin_id=config.admin_tg_id)
     return dp

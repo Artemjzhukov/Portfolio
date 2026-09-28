@@ -1,6 +1,7 @@
 import re
 
 _KEEP = re.compile(r"[^\w\s']")
+_MARKDOWN = re.compile(r"[*_`~]")
 
 _CONTRACTIONS = {
     "didn't": "did not",
@@ -51,10 +52,12 @@ def normalize(text: str | None) -> str:
     if not text:
         return ""
     text = text.lower().strip()
-    text = _KEEP.sub("", text)
+    text = _MARKDOWN.sub("", text)
     words = text.split()
     expanded = [_CONTRACTIONS.get(w, w) for w in words]
-    return " ".join(" ".join(expanded).split())
+    text = " ".join(expanded)
+    text = _KEEP.sub("", text)
+    return " ".join(text.split())
 
 
 def check_answer(exercise: dict, given: str) -> bool:

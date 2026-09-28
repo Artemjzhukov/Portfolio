@@ -3,7 +3,7 @@
 > **Stage 1 output (Grill)** — per `.clinerules`. Status: **✅ Approved** («Plan is Approved»).
 > **Development status:** Phase 1 MVP **complete** (85 tests, live smoke passed 2026-09-09). Phase 2 **complete** — SRS, chat corrections, reminders, lesson_progress (135 tests green, ruff clean, 2026-09-11). Phase 3 **complete** — stats, error patterns, weekly summary, local run (150 tests green, ruff clean, 2026-09-12).
 > **Pedagogical upgrade v2 shipped**: 4-phase scaffolding, smart tolerance, clear instructions, lexical chunks (156 tests, 2026-09-15).
-> **Phase 4 in planning**: «i+1 Mini-Stories» & «Read & Retell» mode (`/story`), Smart Vocabulary Recycling, promotion reassessment test, Docker.
+> **Phase 4 shipped (1–2)**: «i+1 Mini-Stories» & «Read & Retell» mode (`/story`), Smart Vocabulary Recycling (171 tests, 2026-09-28). Remaining: promotion reassessment test, Docker.
 > Decisions locked during interview with the owner (12 questions, one branch at a time).
 
 ## 1. What we're building
@@ -89,9 +89,10 @@ A Telegram bot that tutors English for Russian speakers. It teaches grammar (B),
 - **Phase 2:** ✅ COMPLETE — conversation corrections (JSON) → SRS + auto-collection → reminders 13:00/19:00 → lesson_progress → ruff.
 - **Phase 3:** ✅ COMPLETE (2026-09-12) — admin `/stats` + `/stats <id>` (overview, spine %, retention, error patterns + LLM categorization «слабые места»), learner `/mylevel` (+ reassessment hint), weekly admin summary, `srs_reviews` history table, local-run (`run.ps1`).
 - **Pedagogical v2:** ✅ COMPLETE — 4-phase scaffolding lessons (CCQ → Form → Sentence → Shadowing/Free speech), smart tolerance checker, explicit instructions, lexical chunks.
-- **Phase 4:** ⏳ NEXT —
-  1. «i+1 Mini-Stories» & «Read & Retell» (`/story`): 100–150 words story at 85–90% comprehension, 2 CCQs, spoken retell challenge with Whisper.
-  2. Smart Vocabulary Recycling: injecting learner's due SRS cards & past errors into story & lesson generation prompts.
+- **Phase 4 (1–2):** ✅ SHIPPED (2026-09-28) —
+  1. «i+1 Mini-Stories» & «Read & Retell» (`/story`): 100–150 words story at 85–90% comprehension, 2 CCQs, spoken retell challenge with Whisper + target-chunk validation; glossary chunks auto-added to SRS.
+  2. Smart Vocabulary Recycling: injecting learner's due SRS cards & past errors into story generation prompts.
+- **Remaining:** ⏳ NEXT —
   3. Reassessment mini-test (5 MC + 1 voice prompt) on ≥5/6 spine topic completion.
   4. Docker containerization & VPS deployment guide.
 

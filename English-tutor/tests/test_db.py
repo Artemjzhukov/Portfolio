@@ -4,7 +4,32 @@ from english_tutor import db
 def test_connect_creates_schema(conn):
     tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"students", "invite_codes", "test_results", "lessons",
-            "lesson_progress", "corrections", "srs_cards"} <= tables
+            "lesson_progress", "corrections", "srs_cards", "stories", "story_progress"} <= tables
+
+
+def test_save_and_get_story(conn):
+    db.upsert_student(conn, 42, status="active", level="A2")
+    story_id = db.save_story(conn, 42, "A2", "coffee", '{"title": "Coffee Time"}')
+    assert story_id > 0
+    row = db.get_story(conn, story_id)
+    assert row["level"] == "A2"
+    assert row["topic"] == "coffee"
+    assert "Coffee Time" in row["content_json"]
+
+
+def test_record_story_progress(conn):
+    db.upsert_student(conn, 42, status="active", level="A2")
+    story_id = db.save_story(conn, 42, "A2", "trip", '{"title": "Trip"}')
+    pid = db.record_story_progress(
+        conn, 42, story_id, questions_score=2,
+        retell_transcript="I went to trip", retell_passed=True,
+    )
+    assert pid > 0
+    row = conn.execute("SELECT * FROM story_progress WHERE id=?", (pid,)).fetchone()
+    assert row["student_id"] == 42
+    assert row["questions_score"] == 2
+    assert row["retell_passed"] == 1
+
 
 
 def test_upsert_and_get_student(conn):
