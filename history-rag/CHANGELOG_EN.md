@@ -242,6 +242,16 @@ Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
 - 4 new tests + fixes (BOM in captions.json — utf-8-sig). Total
   **105 tests green**.
 
+### 6.5 Docker: healthcheck + restart and a cold restart
+- Added a qdrant `healthcheck` (`bash /dev/tcp/localhost/6333` — no
+  curl/wget in the image) and `depends_on: condition: service_healthy` for
+  the assessment service — the API server no longer starts before Qdrant
+  is ready.
+- `restart: unless-stopped` on all three services (survives machine reboots).
+- Verified from scratch (`docker compose down && up -d`): qdrant Waiting →
+  Healthy → assessment starts only after; `/health` immediately reports
+  `qdrant_ready: true`; `/media/карты/krym_1853.png` serves (200).
+
 ### 6.3 Docker context & CI
 - **`.dockerignore`** — the build context used to ship `.venv` and `.history`
   (gigabytes) to the daemon. The image now receives only what it needs

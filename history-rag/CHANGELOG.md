@@ -237,6 +237,16 @@
 - 4 новых теста + фиксы (BOM в captions.json — utf-8-sig). Итого
   **105 тестов зелёных**.
 
+### 6.5 Docker: healthcheck + restart и холодный рестарт
+- Добавлен `healthcheck` для qdrant (`bash /dev/tcp/localhost/6333` — curl/wget
+  в образе нет) и `depends_on: condition: service_healthy` у assessment —
+  сервер больше не стартует раньше готовности Qdrant.
+- Всем трём сервисам — `restart: unless-stopped` (сервер переживает
+  перезагрузку машины).
+- Проверено «с нуля» (`docker compose down && up -d`): qdrant Waiting →
+  Healthy → только потом стартует assessment; `/health` сразу
+  `qdrant_ready: true`; `/media/карты/krym_1853.png` отдаётся (200).
+
 ### 6.3 Docker-контекст и CI
 - **`.dockerignore`** — build-контекст раньше отправлял в демон `.venv` и
   `.history` (гигабайты). Теперь в образ попадают только нужные файлы

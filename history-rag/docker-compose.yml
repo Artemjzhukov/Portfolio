@@ -2,14 +2,23 @@ services:
   # Векторная база данных Qdrant
   qdrant:
     image: qdrant/qdrant:latest
+    restart: unless-stopped
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      # В образе нет curl/wget — используем встроенный bash /dev/tcp.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   assessment:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file: .env
@@ -23,10 +32,12 @@ services:
       # Иллюстрации корпуса: host ./data/media <-> контейнер (раздаются по /media)
       - ./data/media:/srv/data/media
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
   # Добавляем n8n
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
     container_name: n8n_orchestrator
     ports:
       - "5678:5678"
