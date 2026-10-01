@@ -8,6 +8,10 @@
 from __future__ import annotations
 
 import base64
+import re
+import time
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -97,6 +101,10 @@ class SubmissionInput(BaseModel):
     submission_type: SubmissionType
     subject_id: str = Field(..., min_length=2, pattern=r"^[a-z][a-z_]*$", description="Напр. 'history', 'social_studies'.")
     student_id: str = Field(..., min_length=1, description="ID ученика или telegram_chat_id.")
+    test_name: Optional[str] = Field(
+        default=None, min_length=1, max_length=200,
+        description="Название теста (напр. 'Вариант 3'); если пусто — '{subject_id} · {дата оценки}'.",
+    )
     answer_key: Optional[dict[str, str]] = Field(
         default=None,
         description="Эталонные ответы: номер задачи -> ответ. Опционально: если не заданы, "
@@ -392,3 +400,296 @@ class JobStatus(BaseModel):
     created_at: Optional[float] = None
     finished_at: Optional[float] = None
 
+
+# ---------------------------------------------------------------------------
+# Дашборд ученика, Notion-синк и Telegram (фаза: прогресс и оценка)
+# ---------------------------------------------------------------------------
+
+
+class TopicMastery(str, Enum):
+    """Статус освоения темы в roadmap дашборда."""
+
+    LEARNED = "learned"
+    NEEDS_REVIEW = "needs_review"
+    PENDING = "pending"
+
+
+TOPIC_MASTERY_RU: dict[str, str] = {
+    TopicMastery.LEARNED.value: "Изучено",
+    TopicMastery.NEEDS_REVIEW.value: "Нужно повторить",
+    TopicMastery.PENDING.value: "В планах",
+}
+
+TASK_STATUS_RU: dict[str, str] = {
+    "Correct": "Верно",
+    "Partially Correct": "Частично верно",
+    "Incorrect": "Неверно",
+    "Not Submitted": "Не сдано",
+}
+
+SUBMISSION_TYPE_RU: dict[str, str] = {
+    "standard_test": "стандартный тест",
+    "ege_exam": "ЕГЭ",
+}
+
+MEDIA_URL_PREFIX = "/media/"
+
+_URL_RE = re.compile(r"^(https?://\S+|/media/\S+)$")
+_HTTP_URL_RE = re.compile(r"^https?://\S+$")
+
+
+def build_test_title(subject_id: str, evaluated_at: float, test_name: str | None = None) -> str:
+    """Название теста: явное test_name либо "subject · YYYY-MM-DD" (UTC)."""
+    name = (test_name or "").strip()
+    if name:
+        return name
+    day = datetime.fromtimestamp(evaluated_at, tz=timezone.utc).strftime("%Y-%m-%d")
+    return f"{subject_id} · {day}"
+
+
+class EvaluationRecord(BaseModel):
+    """Строка таблицы results: что сохраняем из AssessmentResult (без повторного LLM)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(..., min_length=1)
+    student_id: str = Field(..., min_length=1)
+    subject_id: str = Field(..., min_length=2, pattern=r"^[a-z][a-z_]*$")
+    submission_type: SubmissionType
+    test_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    test_title: str = Field(..., min_length=1, max_length=200)
+    total_score: float = Field(..., ge=0)
+    max_possible_score: float = Field(..., ge=0)
+    percentage: float = Field(..., ge=0.0, le=100.0)
+    task_breakdown: list[TaskBreakdown] = Field(default_factory=list)
+    needs_human_review: bool = False
+    evaluated_at: float = Field(default_factory=time.time, ge=0)
+
+    @model_validator(mode="after")
+    def _recompute_percentage(self) -> "EvaluationRecord":
+        if self.max_possible_score > 0:
+            self.percentage = round(self.total_score / self.max_possible_score * 100, 1)
+        else:
+            self.percentage = 0.0
+        return self
+
+    @classmethod
+    def from_assessment(
+        cls,
+        job_id: str,
+        result: AssessmentResult,
+        *,
+        test_name: str | None = None,
+        evaluated_at: float | None = None,
+    ) -> "EvaluationRecord":
+        """Единственная точка маппинга AssessmentResult -> строка results."""
+        ts = evaluated_at if evaluated_at is not None else time.time()
+        return cls(
+            job_id=job_id,
+            student_id=result.student_id,
+            subject_id=result.subject_id,
+            submission_type=result.submission_type,
+            test_name=test_name,
+            test_title=build_test_title(result.subject_id, ts, test_name),
+            total_score=result.total_score,
+            max_possible_score=result.max_possible_score,
+            percentage=result.percentage,
+            task_breakdown=result.task_breakdown,
+            needs_human_review=result.needs_human_review,
+            evaluated_at=ts,
+        )
+
+
+class DashboardTestItem(BaseModel):
+    """Одна работа в истории дашборда (последние N)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(..., min_length=1)
+    test_title: str = Field(..., min_length=1, max_length=200)
+    submission_type: SubmissionType
+    total_score: float = Field(..., ge=0)
+    max_possible_score: float = Field(..., ge=0)
+    percentage: float = Field(..., ge=0.0, le=100.0)
+    evaluated_at: float = Field(..., ge=0)
+    needs_human_review: bool = False
+
+    @model_validator(mode="after")
+    def _recompute_percentage(self) -> "DashboardTestItem":
+        if self.max_possible_score > 0:
+            self.percentage = round(self.total_score / self.max_possible_score * 100, 1)
+        else:
+            self.percentage = 0.0
+        return self
+
+
+
+class DashboardTaskItem(BaseModel):
+    """Детализация одного задания в дашборде."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_number: Union[int, str]
+    earned_points: int = Field(..., ge=0)
+    max_points: int = Field(..., ge=0)
+    status: TaskStatus
+    deduction_reason_ru: str = Field(default="", max_length=2000)
+    topics_to_review_ru: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def _status_consistent(self) -> "DashboardTaskItem":
+        earned, maximum = self.earned_points, self.max_points
+        if earned > maximum:
+            raise ValueError("earned_points не может превышать max_points")
+        if maximum > 0 and earned == maximum:
+            expected = ("Correct",)
+        elif earned > 0:
+            expected = ("Partially Correct",)
+        else:
+            expected = ("Incorrect", "Not Submitted")
+        if self.status not in expected:
+            raise ValueError(f"статус {self.status!r} не согласуется с баллами {earned}/{maximum}")
+        return self
+
+
+class DashboardTopicItem(BaseModel):
+    """Строка roadmap: тема и статус освоения."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    topic_ru: str = Field(..., min_length=1, max_length=200)
+    status: TopicMastery
+    source: str = Field(default="", max_length=120, description="Откуда выведено: RAG, ошибки заданий, эксперт.")
+
+
+class MaterialLink(BaseModel):
+    """Ссылка на материал: /media/... или внешний URL."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title_ru: str = Field(..., min_length=1, max_length=200)
+    url: str = Field(..., min_length=1, max_length=2000)
+    kind: Literal["pdf", "file", "link"] = "file"
+
+    @field_validator("url")
+    @classmethod
+    def _url_allowed(cls, v: str) -> str:
+        if not _URL_RE.match(v):
+            raise ValueError("url должен быть https://... или /media/...")
+        return v
+
+    @model_validator(mode="after")
+    def _pdf_matches_kind(self) -> "MaterialLink":
+        if self.kind == "pdf":
+            path = self.url.split("?", 1)[0].split("#", 1)[0]
+            if not path.lower().endswith(".pdf"):
+                raise ValueError("kind='pdf' требует url на .pdf")
+        return self
+
+
+class StudentDashboard(BaseModel):
+    """Полный payload GET /dashboard/{student_id}."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: str = Field(..., min_length=1)
+    overall_score: float = Field(..., ge=0)
+    pass_rate: float = Field(..., ge=0.0, le=100.0)
+    covered_topics_count: int = Field(..., ge=0)
+    total_tests_count: int = Field(..., ge=0, description="Накопительный счётчик всех работ.")
+    recent_tests: list[DashboardTestItem] = Field(default_factory=list, max_length=10)
+    tasks: list[DashboardTaskItem] = Field(default_factory=list)
+    roadmap: list[DashboardTopicItem] = Field(default_factory=list)
+    materials: list[MaterialLink] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _totals_consistent(self) -> "StudentDashboard":
+        if self.total_tests_count < len(self.recent_tests):
+            raise ValueError("total_tests_count меньше числа recent_tests")
+        return self
+
+
+class NotionSyncPayload(BaseModel):
+    """Строка Notion CRM учителя (синк — только фоном, не блокирует API)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    student_name: str = Field(..., min_length=1, max_length=200)
+    test_title: str = Field(..., min_length=1, max_length=200)
+    score: float = Field(..., ge=0)
+    percentage: float = Field(..., ge=0.0, le=100.0)
+    date: str = Field(..., description="Дата в ISO-8601.")
+    dashboard_url: str = Field(..., description="Ссылка на дашборд ученика.")
+    job_id: str = Field(..., min_length=1)
+    needs_human_review: bool = False
+
+    @field_validator("date")
+    @classmethod
+    def _iso_date(cls, v: str) -> str:
+        try:
+            datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("date должен быть строкой ISO-8601") from exc
+        return v
+
+    @field_validator("dashboard_url")
+    @classmethod
+    def _http_url(cls, v: str) -> str:
+        if not _HTTP_URL_RE.match(v):
+            raise ValueError("dashboard_url должен быть https://...")
+        return v
+
+
+class TelegramResultMessage(BaseModel):
+    """Быстрый ответ ученику в Telegram (лимит 4096 знаков)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    chat_id: str = Field(..., min_length=1, max_length=64, pattern=r"^\S+$")
+    text_ru: str = Field(..., min_length=1, max_length=4096)
+    dashboard_url: str = Field(..., description="Ссылка на детальный разбор.")
+    parse_mode: Literal["HTML"] = "HTML"
+
+    @field_validator("dashboard_url")
+    @classmethod
+    def _http_url(cls, v: str) -> str:
+        if not _HTTP_URL_RE.match(v):
+            raise ValueError("dashboard_url должен быть https://...")
+        return v
+
+
+class DashboardTokenIssue(BaseModel):
+    """Запрос на выпуск одноразовой ссылки (команда /dashboard)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: str = Field(..., min_length=1)
+    telegram_chat_id: str = Field(..., min_length=1, max_length=64, pattern=r"^\S+$")
+    ttl_hours: int = Field(default=72, ge=1, le=720)
+
+
+class DashboardTokenRecord(BaseModel):
+    """Строка таблицы dashboard_tokens (храним только хэш токена)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token_hash: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    student_id: str = Field(..., min_length=1)
+    telegram_chat_id: str = Field(..., min_length=1, max_length=64)
+    created_at: float = Field(..., ge=0)
+    expires_at: float = Field(..., ge=0)
+    used: bool = False
+
+    @model_validator(mode="after")
+    def _expiry_after_creation(self) -> "DashboardTokenRecord":
+        if self.expires_at <= self.created_at:
+            raise ValueError("expires_at должен быть позже created_at")
+        return self
+
+
+class DashboardAccessQuery(BaseModel):
+    """Параметр ?token=... эндпоинта дашборда."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(..., min_length=20, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
