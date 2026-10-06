@@ -132,11 +132,19 @@ def _run_job(
     file_bytes: bytes,
     file_name: str | None,
 ) -> None:
-    """Фоновая джоба: результат ИЛИ ошибка всегда попадают в store (никаких тихих пропаж)."""
+    """Фоновая джоба: результат ИЛИ ошибка всегда попадают в store (никаких тихих пропаж).
+
+    После set_done сохраняем EvaluationRecord в results из того же объекта
+    AssessmentResult — новых вызовов LLM/Qdrant здесь нет.
+    """
+    from app.schemas import EvaluationRecord
+
     store.set_running(job_id)
     try:
-        result = pipeline.run(SubmissionInput(**payload_dict), file_bytes, file_name, job_id=job_id)
+        payload = SubmissionInput(**payload_dict)
+        result = pipeline.run(payload, file_bytes, file_name, job_id=job_id)
         store.set_done(job_id, result.model_dump())
+        store.save_result(EvaluationRecord.from_assessment(job_id, result, test_name=payload.test_name))
     except Exception as exc:  # noqa: BLE001 — ошибка джобы это данные для n8n, не краш
         logger.exception("job=%s pipeline failure", job_id)
         store.set_error(job_id, f"{type(exc).__name__}: {exc}")

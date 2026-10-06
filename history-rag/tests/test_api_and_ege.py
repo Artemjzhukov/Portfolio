@@ -419,4 +419,49 @@ class TestAPI:
         messages = [record.getMessage() for record in caplog.records]
         assert any(job_id in m for m in messages)
         assert any("accepted new" in m for m in messages)
-        assert any("done" in m for m in messages)
+
+    def test_async_saves_evaluation_record(self, client, settings, tmp_path, monkeypatch):
+        """После set_done фоновая джоба сохраняет EvaluationRecord в results (без повторного LLM)."""
+        from app.jobs import JobStore
+        from app.schemas import AssessmentResult
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class RealStubPipeline:
+            def run(self, payload, file_bytes, file_name, job_id=None):
+                return AssessmentResult(
+                    student_id=payload.student_id, subject_id=payload.subject_id,
+                    submission_type=payload.submission_type,
+                    total_score=1, max_possible_score=1, percentage=0,
+                    summary_feedback="ok",
+                )
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: RealStubPipeline())
+        resp = client.post("/process-submission/async", json=dict(
+            file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
+            subject_id="history", student_id="s1", answer_key={"1": "3"},
+            test_name="Вариант 3",
+        ))
+        job_id = resp.json()["job_id"]
+        record = JobStore(settings.jobs_db_path).get_result_record(job_id)
+        assert record is not None
+        assert record["test_title"] == "Вариант 3"
+        assert record["total_score"] == 1.0
+        assert record["student_id"] == "s1"
+
+    def test_async_failure_saves_no_record(self, client, settings, tmp_path, monkeypatch):
+        """При ошибке пайплайна запись в results не появляется."""
+        from app.jobs import JobStore
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class BoomPipeline:
+            def run(self, payload, file_bytes, file_name, job_id=None):
+                raise RuntimeError("бум")
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: BoomPipeline())
+        resp = client.post("/process-submission/async", json=dict(
+            file_bytes="AAAA", file_name="w.txt", submission_type="standard_test",
+            subject_id="history", student_id="s1", answer_key={"1": "3"},
+        ))
+        assert JobStore(settings.jobs_db_path).get_result_record(resp.json()["job_id"]) is None

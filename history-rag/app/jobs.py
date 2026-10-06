@@ -36,6 +36,37 @@ CREATE TABLE IF NOT EXISTS jobs (
 # Джоба в queued/running дольше этого — считаем процесс умершим, разрешаем перезапуск.
 STALE_SECONDS = 20 * 60
 
+# Одноразовая ссылка дашборда по умолчанию живёт 72 часа.
+DASHBOARD_TOKEN_TTL_HOURS = 72
+
+_RESULTS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS results (
+    job_id TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    submission_type TEXT NOT NULL,
+    test_name TEXT,
+    test_title TEXT NOT NULL,
+    total_score REAL NOT NULL,
+    max_possible_score REAL NOT NULL,
+    percentage REAL NOT NULL,
+    task_breakdown_json TEXT NOT NULL DEFAULT '[]',
+    needs_human_review INTEGER NOT NULL DEFAULT 0,
+    evaluated_at REAL NOT NULL
+)
+"""
+
+_TOKENS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS dashboard_tokens (
+    token_hash TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    telegram_chat_id TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0
+)
+"""
+
 
 class JobStore:
     """Потокобезопасный стор джоб. Один файл SQLite, без внешних зависимостей."""
@@ -45,6 +76,8 @@ class JobStore:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(_SCHEMA)
+        self._conn.execute(_RESULTS_SCHEMA)
+        self._conn.execute(_TOKENS_SCHEMA)
 
     # ------------------------------------------------------------------
 
@@ -117,6 +150,115 @@ class JobStore:
             "UPDATE jobs SET status = 'error', error = ?, finished_at = ? WHERE job_id = ?",
             (error[:2000], time.time()),
         )
+
+    # ------------------------------------------------------------------
+    # Персистентность прогресса (таблица results, без повторного обращения к LLM)
+    # ------------------------------------------------------------------
+
+    def save_result(self, record) -> None:
+        """Сохраняет/обновляет строку EvaluationRecord по job_id (идемпотентно)."""
+        tasks = [m.model_dump(mode="json") for m in record.task_breakdown]
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO results (job_id, student_id, subject_id, submission_type,"
+                " test_name, test_title, total_score, max_possible_score, percentage,"
+                " task_breakdown_json, needs_human_review, evaluated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT(job_id) DO UPDATE SET"
+                " student_id = excluded.student_id,"
+                " subject_id = excluded.subject_id,"
+                " submission_type = excluded.submission_type,"
+                " test_name = excluded.test_name,"
+                " test_title = excluded.test_title,"
+                " total_score = excluded.total_score,"
+                " max_possible_score = excluded.max_possible_score,"
+                " percentage = excluded.percentage,"
+                " task_breakdown_json = excluded.task_breakdown_json,"
+                " needs_human_review = excluded.needs_human_review,"
+                " evaluated_at = excluded.evaluated_at",
+                (
+                    record.job_id, record.student_id, record.subject_id,
+                    record.submission_type, record.test_name, record.test_title,
+                    record.total_score, record.max_possible_score, record.percentage,
+                    json.dumps(tasks, ensure_ascii=False),
+                    1 if record.needs_human_review else 0,
+                    record.evaluated_at,
+                ),
+            )
+            self._conn.commit()
+        logger.info("job=%s result saved: student=%s title=%s", record.job_id, record.student_id, record.test_title)
+
+    def get_result_record(self, job_id: str) -> Optional[dict]:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM results WHERE job_id = ?", (job_id,)).fetchone()
+            return self._result_to_dict(row) if row else None
+
+    def list_recent(self, student_id: str, limit: int = 10) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM results WHERE student_id = ? ORDER BY evaluated_at DESC LIMIT ?",
+                (student_id, limit),
+            ).fetchall()
+            return [self._result_to_dict(row) for row in rows]
+
+    def count_results(self, student_id: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM results WHERE student_id = ?", (student_id,)
+            ).fetchone()
+            return int(row[0])
+
+    @staticmethod
+    def _result_to_dict(row) -> dict:
+        data = dict(row)
+        data["task_breakdown"] = json.loads(data.pop("task_breakdown_json") or "[]")
+        data["needs_human_review"] = bool(data["needs_human_review"])
+        return data
+
+    # ------------------------------------------------------------------
+    # Одноразовые токены дашборда (таблица dashboard_tokens)
+    # ------------------------------------------------------------------
+
+    def issue_token(self, student_id: str, telegram_chat_id: str, *, ttl_hours: int = DASHBOARD_TOKEN_TTL_HOURS, now: Optional[float] = None) -> str:
+        """Выпускает токен, возвращает сырое значение; в БД — только SHA-256."""
+        import secrets
+
+        created = now if now is not None else time.time()
+        raw = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw.encode("ascii")).hexdigest()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO dashboard_tokens (token_hash, student_id, telegram_chat_id, created_at, expires_at, used)"
+                " VALUES (?, ?, ?, ?, ?, 0)",
+                (token_hash, student_id, telegram_chat_id, created, created + ttl_hours * 3600),
+            )
+            self._conn.commit()
+        logger.info("dashboard token issued: student=%s chat=%s", student_id, telegram_chat_id)
+        return raw
+
+    def consume_token(self, raw_token: str, telegram_chat_id: str, *, now: Optional[float] = None) -> Optional[dict]:
+        """Одноразовое списание: чат, срок и неиспользованность проверяются атомарно."""
+        at = now if now is not None else time.time()
+        token_hash = hashlib.sha256(raw_token.encode("ascii", "ignore")).hexdigest()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM dashboard_tokens WHERE token_hash = ?", (token_hash,)
+            ).fetchone()
+            if row is None or row["used"] or row["telegram_chat_id"] != telegram_chat_id or row["expires_at"] <= at:
+                return None
+            self._conn.execute("UPDATE dashboard_tokens SET used = 1 WHERE token_hash = ?", (token_hash,))
+            self._conn.commit()
+            return dict(row)
+
+    def revoke_tokens(self, student_id: str, telegram_chat_id: str) -> None:
+        """Помечает использованными все токены пары (студент, чат) — для перевыпуска."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE dashboard_tokens SET used = 1 WHERE student_id = ? AND telegram_chat_id = ?",
+                (student_id, telegram_chat_id),
+            )
+            self._conn.commit()
+        logger.info("dashboard tokens revoked: student=%s", student_id)
 
     # ------------------------------------------------------------------
 
