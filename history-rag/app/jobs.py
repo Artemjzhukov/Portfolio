@@ -239,7 +239,10 @@ class JobStore:
     def consume_token(self, raw_token: str, telegram_chat_id: str, *, now: Optional[float] = None) -> Optional[dict]:
         """Одноразовое списание: чат, срок и неиспользованность проверяются атомарно."""
         at = now if now is not None else time.time()
-        token_hash = hashlib.sha256(raw_token.encode("ascii", "ignore")).hexdigest()
+        try:
+            token_hash = hashlib.sha256(raw_token.encode("ascii")).hexdigest()
+        except (UnicodeEncodeError, AttributeError):
+            return None
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM dashboard_tokens WHERE token_hash = ?", (token_hash,)

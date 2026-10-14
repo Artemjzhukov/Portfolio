@@ -688,8 +688,8 @@ class DashboardTokenRecord(BaseModel):
 
 
 class DashboardAccessQuery(BaseModel):
-    """Параметр ?token=... эндпоинта дашборда."""
+    """Параметр ?token=... эндпоинта дашборда (формат secrets.token_urlsafe)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    token: str = Field(..., min_length=20, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    token: str = Field(..., min_length=20, max_length=128, pattern=r"^[A-Za-z0-9_\-]+$")

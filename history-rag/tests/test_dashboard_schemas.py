@@ -241,6 +241,10 @@ class TestDashboardTokens:
         with pytest.raises(ValidationError):
             DashboardAccessQuery(token="short")
 
+    def test_token_with_dash_accepted(self):
+        token = "a" * 20 + "-b_c"
+        assert DashboardAccessQuery(token=token).token == token
+
     def test_bad_token_chars_rejected(self):
         with pytest.raises(ValidationError):
             DashboardAccessQuery(token="x" * 20 + "!!!")

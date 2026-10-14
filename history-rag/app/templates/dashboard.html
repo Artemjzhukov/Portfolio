@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой прогресс — {{ dashboard.student_id }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+<main class="mx-auto max-w-xl px-4 py-6">
+  <h1 class="text-2xl font-bold">Мой прогресс</h1>
+  <p class="text-sm text-slate-500">Ученик: {{ dashboard.student_id }}</p>
+
+  <section class="mt-4 rounded-2xl bg-white p-4 shadow" aria-label="Итог">
+    <h2 class="text-lg font-semibold">Итог</h2>
+    <dl class="mt-2 grid grid-cols-3 gap-2 text-center">
+      <div class="rounded-xl bg-slate-100 p-3">
+        <dt class="text-xs text-slate-500">Общий балл</dt>
+        <dd class="text-xl font-bold">{{ dashboard.overall_score }}</dd>
+      </div>
+      <div class="rounded-xl bg-slate-100 p-3">
+        <dt class="text-xs text-slate-500">Процент верных</dt>
+        <dd class="text-xl font-bold">{{ dashboard.pass_rate }}%</dd>
+      </div>
+      <div class="rounded-xl bg-slate-100 p-3">
+        <dt class="text-xs text-slate-500">Тем изучено</dt>
+        <dd class="text-xl font-bold">{{ dashboard.covered_topics_count }}</dd>
+      </div>
+    </dl>
+    <p class="mt-2 text-sm text-slate-500">Всего работ: {{ dashboard.total_tests_count }}</p>
+  </section>
+
+  <section class="mt-4 rounded-2xl bg-white p-4 shadow" aria-label="Последние работы">
+    <h2 class="text-lg font-semibold">Последние работы</h2>
+    {% if dashboard.recent_tests %}
+    <ul class="mt-2 space-y-2">
+      {% for test in dashboard.recent_tests %}
+      <li class="rounded-xl border border-slate-200 p-3">
+        <div class="flex items-center justify-between">
+          <strong>{{ test.test_title }}</strong>
+          <span class="text-sm font-bold">{{ test.total_score }}/{{ test.max_possible_score }} ({{ test.percentage }}%)</span>
+        </div>
+        {% if test.needs_human_review %}
+        <p class="mt-1 text-xs text-amber-700">На проверке у преподавателя</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm text-slate-500">У вас пока нет проверенных работ.</p>
+    {% endif %}
+  </section>
+
+  <section class="mt-4 rounded-2xl bg-white p-4 shadow" aria-label="Разбор заданий">
+    <h2 class="text-lg font-semibold">Разбор заданий</h2>
+    {% if dashboard.tasks %}
+    <ul class="mt-2 space-y-2">
+      {% for task in dashboard.tasks %}
+      <li class="rounded-xl border border-slate-200 p-3">
+        <div class="flex items-center justify-between">
+          <strong>Задание {{ task.task_number }}</strong>
+          <span class="text-sm">{{ task.earned_points }}/{{ task.max_points }} · {{ task_status_ru[task.status] }}</span>
+        </div>
+        {% if task.deduction_reason_ru %}
+        <p class="mt-1 text-sm text-slate-700">{{ task.deduction_reason_ru }}</p>
+        {% endif %}
+        {% if task.topics_to_review_ru %}
+        <p class="mt-1 text-sm text-slate-500">Повторить: {{ task.topics_to_review_ru }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm text-slate-500">Заданий пока нет.</p>
+    {% endif %}
+  </section>
+
+  <section class="mt-4 rounded-2xl bg-white p-4 shadow" aria-label="План повторения">
+    <h2 class="text-lg font-semibold">План повторения</h2>
+    {% if dashboard.roadmap %}
+    <ul class="mt-2 space-y-2">
+      {% for topic in dashboard.roadmap %}
+      <li class="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+        <span>{{ topic.topic_ru }}</span>
+        <span class="rounded-full px-3 py-1 text-xs font-semibold {% if topic.status.value == 'learned' %}bg-green-100 text-green-800{% elif topic.status.value == 'needs_review' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-600{% endif %}">{{ topic_labels[topic.status.value] }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm text-slate-500">Пока нет тем для повторения — так держать!</p>
+    {% endif %}
+  </section>
+
+  <section class="mt-4 rounded-2xl bg-white p-4 shadow" aria-label="Материалы">
+    <h2 class="text-lg font-semibold">Материалы</h2>
+    {% if dashboard.materials %}
+    <ul class="mt-2 space-y-2">
+      {% for material in dashboard.materials %}
+      <li><a class="text-blue-700 underline" href="{{ material.url }}">{{ material.title_ru }}</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm text-slate-500">Материалов пока нет.</p>
+    {% endif %}
+  </section>
+</main>
+</body>
+</html>

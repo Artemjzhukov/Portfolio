@@ -62,6 +62,11 @@ class Settings(BaseSettings):
         description="Публичный базовый URL для ссылок на изображения, напр. http://localhost:8000/media. "
         "Пусто — в отчётах используется относительный путь.",
     )
+    public_base_url: str = Field(
+        default="",
+        description="Публичный базовый URL сервиса для ссылок в уведомлениях, напр. https://app.example. "
+        "Пусто — в API возвращаются относительные пути.",
+    )
 
     # --- API ---
     api_key: str = ""                      # shared secret для n8n; пусто = авторизация выключена

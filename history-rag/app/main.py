@@ -19,6 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from app.config import Settings, get_settings
+from app.dashboard_routes import register_dashboard_routes
 from app.jobs import JobStore, compute_job_id
 from app.schemas import (
     AssessmentResult,
@@ -210,3 +211,11 @@ def get_result(job_id: str, x_api_key: str | None = Header(default=None)) -> Job
         created_at=row["created_at"],
         finished_at=row["finished_at"],
     )
+
+# ---------------------------------------------------------------------------
+# Дашборд ученика: регистрация роутов — в самом конце,
+# чтобы _get_job_store уже существовал.
+# ---------------------------------------------------------------------------
+
+register_dashboard_routes(app)
+
