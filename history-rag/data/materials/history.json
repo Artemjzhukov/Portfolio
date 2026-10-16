@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "subject_id": "history",
+  "note": "ПРИМЕР. Материалы для закрепления тем дашборда. Ключ — точное название темы из roadmap (регистр и кавычки не важны). Тренажёры/тесты — kind='link', PDF — kind='pdf', файлы из data/media/<тема>/ прикрепляются автоматически.",
+  "topics": {
+    "Отмена крепостного права": [
+      {"title_ru": "Карта: Крымская война 1853-1856", "url": "/media/карты/krym_1853.png", "kind": "file"},
+      {"title_ru": "Конспект: Великие реформы (PDF)", "url": "https://example.com/teacher/reformy.pdf", "kind": "pdf"},
+      {"title_ru": "Тренажёр по теме", "url": "https://example.com/exercises/reformy", "kind": "link"}
+    ]
+  }
+}

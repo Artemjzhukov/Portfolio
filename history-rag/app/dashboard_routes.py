@@ -68,7 +68,14 @@ def register_dashboard_routes(app) -> None:
         record = _consume_own_token(_store(), query.token, student_id)
         if record is None:
             raise HTTPException(status_code=403, detail="Недействительная ссылка")
-        dashboard = build_student_dashboard(_store(), student_id)
+        settings = _settings()
+        from app.services.topic_materials import TopicMaterialsStore
+
+        dashboard = build_student_dashboard(
+            _store(), student_id,
+            materials_store=TopicMaterialsStore(settings),
+            media_dir=settings.media_dir,
+        )
         return HTMLResponse(
             content=render_dashboard(dashboard), media_type="text/html; charset=utf-8"
         )

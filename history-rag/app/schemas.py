@@ -560,6 +560,10 @@ class DashboardTopicItem(BaseModel):
     topic_ru: str = Field(..., min_length=1, max_length=200)
     status: TopicMastery
     source: str = Field(default="", max_length=120, description="Откуда выведено: RAG, ошибки заданий, эксперт.")
+    materials: list[MaterialLink] = Field(
+        default_factory=list,
+        description="Материалы для закрепления темы: сначала файл учителя, затем авто-медиа.",
+    )
 
 
 class MaterialLink(BaseModel):
@@ -585,6 +589,25 @@ class MaterialLink(BaseModel):
             if not path.lower().endswith(".pdf"):
                 raise ValueError("kind='pdf' требует url на .pdf")
         return self
+
+
+class SubjectMaterialsTopic(BaseModel):
+    """Одна тема в файле материалов учителя."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[MaterialLink] = Field(default_factory=list)
+
+
+class SubjectMaterialsFile(BaseModel):
+    """Файл материалов учителя: data/materials/{subject_id}.json."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(default=1, ge=1)
+    subject_id: str = Field(..., min_length=2, pattern=r"^[a-z][a-z_]*$")
+    topics: dict[str, list[MaterialLink]] = Field(default_factory=dict)
+    note: Optional[str] = Field(default=None)
 
 
 class StudentDashboard(BaseModel):

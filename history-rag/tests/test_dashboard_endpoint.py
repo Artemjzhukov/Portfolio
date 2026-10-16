@@ -16,6 +16,14 @@ class TestDashboardEndpoint:
     def test_valid_token_renders_blocks(self, settings, tmp_path, monkeypatch, caplog):
         from app.jobs import JobStore
         from app.schemas import EvaluationRecord, TaskBreakdown
+        from app.services.topic_materials import TopicMaterialsStore
+
+        settings.materials_dir = tmp_path
+        write = tmp_path.joinpath("history.json").write_text
+        write('{"schema_version": 1, "subject_id": "history",'
+              ' "topics": {"Отмена крепостного права": ['
+              '{"title_ru": "Карта", "url": "/media/history/map.png", "kind": "file"}]}}',
+              encoding="utf-8")
 
         store = JobStore(str(tmp_path / "jobs.db"))
         store.save_result(EvaluationRecord(
@@ -46,6 +54,8 @@ class TestDashboardEndpoint:
         assert "Перепутал дату" in html
         assert "Отмена крепостного права" in html
         assert "T j1" in html
+        # материалы темы видны внутри строки roadmap
+        assert "Карта" in html and "/media/history/map.png" in html
 
 
     def test_token_issued_for_demo_student(self, settings, tmp_path, monkeypatch):

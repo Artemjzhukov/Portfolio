@@ -80,9 +80,18 @@
     {% if dashboard.roadmap %}
     <ul class="mt-2 space-y-2">
       {% for topic in dashboard.roadmap %}
-      <li class="flex items-center justify-between rounded-xl border border-slate-200 p-3">
-        <span>{{ topic.topic_ru }}</span>
-        <span class="rounded-full px-3 py-1 text-xs font-semibold {% if topic.status.value == 'learned' %}bg-green-100 text-green-800{% elif topic.status.value == 'needs_review' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-600{% endif %}">{{ topic_labels[topic.status.value] }}</span>
+      <li class="rounded-xl border border-slate-200 p-3">
+        <div class="flex items-center justify-between">
+          <span>{{ topic.topic_ru }}</span>
+          <span class="rounded-full px-3 py-1 text-xs font-semibold {% if topic.status.value == 'learned' %}bg-green-100 text-green-800{% elif topic.status.value == 'needs_review' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-600{% endif %}">{{ topic_labels[topic.status.value] }}</span>
+        </div>
+        {% if topic.materials %}
+        <ul class="mt-2 space-y-1">
+          {% for material in topic.materials %}
+          <li><a class="text-sm text-blue-700 underline" href="{{ material.url }}">{{ material.title_ru }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -100,7 +109,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="mt-2 text-sm text-slate-500">Материалов пока нет.</p>
+    <p class="mt-2 text-sm text-slate-500">Материалы прикреплены к темам выше.</p>
     {% endif %}
   </section>
 </main>
