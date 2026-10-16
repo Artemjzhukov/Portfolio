@@ -267,3 +267,40 @@
   POST (идемпотентность делает это безопасным).
 - Итоговый балл и `percentage` считаются кодом — LLM не влияет на арифметику.
 
+## Фаза 7 — Прогресс ученика, дашборд, материалы (по ТЗ «Student Progress»)
+
+7.1 **Схемы дашборда** (`d4ddcec`): `EvaluationRecord` (+`from_assessment`),
+`DashboardTestItem/TaskItem/TopicItem/MaterialLink`, `StudentDashboard`
+(lim 10 + инвариант накопительного счётчика), `NotionSyncPayload`,
+`TelegramResultMessage` (HTML, лимит 4096), `DashboardTokenIssue/Record/AccessQuery`,
+RU-маппинги `TASK_STATUS_RU/TOPIC_MASTERY_RU`, `test_name` в `SubmissionInput`.
+- Notion остаётся только по тестам (n8n-узел после проверки); HTML-дашборд —
+  по всем материалам ученика. Дашборд собирается только из SQLite `results`,
+  без LLM/Qdrant — как требует пункт «Decoupled Sync» (<500 мс).
+
+7.2 **Персистентность** (`8dbdfed`): таблицы `results` и `dashboard_tokens` в той же
+SQLite; запись результата из `set_done` в том же объекте `AssessmentResult`
+(без повторных LLM-вызовов); хэши одноразовых токенов.
+
+7.3 **Фасад оценки** (`38389e9`): `StudentEvaluator` поверх `AssessmentPipeline`
+(делегирование один-в-один + сохранение прогресса).
+
+7.4 **Сборка и эндпоинты дашборда** (`b653df5`, `77fb45f`):
+`GET /dashboard/{student_id}?token=...` — одноразовая ссылка из Telegram,
+сверка студента/чата по записи токена в БД (в URL чата нет), перевыпуск
+через `POST /dashboard/token` (старые токены гасятся), русский Jinja2+Tailwind
+HTML: итог, последние работы, разбор заданий, план повторения, материалы.
+- Поймано и исправлено: неверный импорт Jinja2, паттерн токена без `-` из
+  `token_urlsafe`, замыкания роутов захватывали не тот `_get_job_store` (тесты
+  ходили в реальную БД) — резолв через `app.main` лениво на каждый запрос.
+
+7.5 **Материалы тем в roadmap** (`186ebab`): два источника, ведёт учитель —
+файлы в `data/media/<тема>/` (авто-attach, ноль настройки) и
+`data/materials/{subject}.json` (тренажёры `kind=link`, PDF, внешние URL).
+Тема сопоставляется со строкой `recommended_topics` проваленных заданий
+(регистр/кавычки не важны); порядок: файл учителя → авто-медиа, дедуп по URL.
+`TopicMastery.LEARNED/PENDING` оставлены незадействованными — без программы
+курса критерий «изучено» не определён; отдельный блок «Материалы» больше не
+нужен — всё в строках тем. 186 тестов зелёных.
+
+

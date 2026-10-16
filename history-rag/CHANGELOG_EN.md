@@ -273,3 +273,41 @@ Phase 5 complete. Next phases — as needed: loading the corpus into Qdrant
 - The total score and `percentage` are computed in code — the LLM never
   affects the arithmetic.
 
+## Phase 7 — Student progress, dashboard, materials (per "Student Progress" spec)
+
+7.1 **Dashboard schemas** (`d4ddcec`): `EvaluationRecord` (+`from_assessment`),
+`DashboardTestItem/TaskItem/TopicItem/MaterialLink`, `StudentDashboard`
+(limit 10 + cumulative-counter invariant), `NotionSyncPayload`,
+`TelegramResultMessage` (HTML, 4096 limit), `DashboardTokenIssue/Record/AccessQuery`,
+RU label maps, `test_name` in `SubmissionInput`.
+- Notion stays tests-only (n8n node after grading); the HTML dashboard covers
+  all of the student's materials and is built only from SQLite `results`,
+  without LLM/Qdrant — per "Decoupled Sync" (<500 ms).
+
+7.2 **Persistence** (`8dbdfed`): `results` and `dashboard_tokens` tables in the
+same SQLite; the result row is written from `set_done` using the same
+`AssessmentResult` object (no repeat LLM calls); hashed one-time tokens.
+
+7.3 **Evaluator facade** (`38389e9`): `StudentEvaluator` over
+`AssessmentPipeline` (one-to-one delegation + progress persistence).
+
+7.4 **Dashboard build & endpoints** (`b653df5`, `77fb45f`):
+`GET /dashboard/{student_id}?token=...` — one-time link from Telegram,
+student/chat verified against the token row in the DB (not in the URL),
+reissue via `POST /dashboard/token` (old tokens revoked), Russian
+Jinja2+Tailwind HTML: summary, recent tests, task breakdown, revision plan,
+materials.
+- Caught and fixed: wrong Jinja2 import, token pattern rejecting `-` from
+  `token_urlsafe`, route closures capturing the wrong `_get_job_store` (tests
+  hit the real DB) — lazy resolution through `app.main` per request.
+
+7.5 **Topic materials in the roadmap** (`186ebab`): two teacher-driven
+sources — files in `data/media/<topic>/` (zero-config auto-attach) and
+`data/materials/{subject}.json` (exercises `kind=link`, PDFs, external URLs).
+Topics are matched to `recommended_topics` of failed tasks (case/quotes
+insensitive); order: teacher file → auto-media, deduped by URL.
+`TopicMastery.LEARNED/PENDING` left unused — without a course curriculum
+there is no "learned" criterion; the standalone "Materials" block is no
+longer needed — everything lives inside topic rows. 186 tests green.
+
+
