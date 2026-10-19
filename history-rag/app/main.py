@@ -163,8 +163,9 @@ def _schedule_result_sync(
 ) -> None:
     """Планирует фоновый синк после успешной оценки. Без вебхуков — тихий пропуск.
 
-    Токен дашборда одноразовый: для Telegram-пуша выпускаем его здесь (revoke
-    старых + issue) и встраиваем готовую ссылку в оба пейлоада.
+    Токены дашборда одноразовые: выпускаем два независимых токена — один для
+    пуша ученику (Telegram), второй для строки учителя (Notion). Иначе первый
+    клик гасит ссылку для второго получателя. Revoke старых — один раз до выпуска.
     """
     notion_url = (settings.notion_webhook_url or "").strip()
     telegram_url = (settings.telegram_webhook_url or "").strip()
@@ -175,14 +176,20 @@ def _schedule_result_sync(
 
     chat_id = payload.telegram_chat_id or payload.student_id
     store.revoke_tokens(payload.student_id, chat_id)
-    raw_token = store.issue_token(payload.student_id, chat_id)
-    dashboard_url = build_dashboard_url(settings, payload.student_id, raw_token)
+    student_url = teacher_url = None
+    if telegram_url:
+        student_url = build_dashboard_url(
+            settings, payload.student_id, store.issue_token(payload.student_id, chat_id))
+    if notion_url:
+        teacher_url = build_dashboard_url(
+            settings, payload.student_id, store.issue_token(payload.student_id, chat_id))
     logger.info("job=%s sync scheduled: chat=%s", record.job_id, chat_id)
     schedule_result_sync(
         record,
         notion_url=notion_url or None,
         telegram_url=telegram_url or None,
-        dashboard_url=dashboard_url,
+        notion_dashboard_url=teacher_url,
+        telegram_dashboard_url=student_url,
         student_name=payload.student_name or payload.student_id,
         chat_id=chat_id,
         notify=lambda text: logger.warning("job=%s %s", record.job_id, text),

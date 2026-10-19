@@ -154,7 +154,69 @@ class TestBackgroundSync:
         _t.sleep(0.3)
         assert notified == []
 
+    def test_distinct_urls_per_channel(self):
+        import time as _t
+
+        from app.services.notify import schedule_result_sync
+
+        calls = {}
+
+        def router(url, payload):
+            calls[url] = payload
+
+        schedule_result_sync(
+            _record(),
+            sender=router,
+            notion_url="https://notion.example/pages",
+            telegram_url="https://telegram.example/send",
+            notion_dashboard_url="https://app.example/dashboard/s1?token=TEACHER",
+            telegram_dashboard_url="https://app.example/dashboard/s1?token=STUDENT",
+        )
+        deadline = _t.monotonic() + 2.0
+        while len(calls) < 2 and _t.monotonic() < deadline:
+            _t.sleep(0.01)
+        assert calls["https://notion.example/pages"]["dashboard_url"].endswith("token=TEACHER")
+        assert calls["https://telegram.example/send"]["dashboard_url"].endswith("token=STUDENT")
+
     def test_partial_config_sends_only_configured_channel(self):
+        import time as _t
+
+        from app.services.notify import schedule_result_sync
+
+        calls = []
+        schedule_result_sync(
+            _record(), sender=lambda url, payload: calls.append((url, payload)),
+            notion_url="https://notion.example/pages",
+            telegram_url=None,
+        )
+        deadline = _t.monotonic() + 2.0
+        while len(calls) < 1 and _t.monotonic() < deadline:
+            _t.sleep(0.01)
+        assert len(calls) == 1
+        assert calls[0][0] == "https://notion.example/pages"
+
+    def test_legacy_single_dashboard_url_still_works(self):
+        """Старый общий dashboard_url — фолбэк для обоих каналов (обратная совместимость)."""
+        import time as _t
+
+        from app.services.notify import schedule_result_sync
+
+        calls = {}
+
+        def router(url, payload):
+            calls[url] = payload
+
+        schedule_result_sync(
+            _record(), sender=router,
+            notion_url="https://notion.example/pages",
+            telegram_url="https://telegram.example/send",
+            dashboard_url="https://app.example/dashboard/s1?token=SHARED",
+        )
+        deadline = _t.monotonic() + 2.0
+        while len(calls) < 2 and _t.monotonic() < deadline:
+            _t.sleep(0.01)
+        assert calls["https://notion.example/pages"]["dashboard_url"].endswith("token=SHARED")
+        assert calls["https://telegram.example/send"]["dashboard_url"].endswith("token=SHARED")
         import time as _t
 
         from app.services.notify import schedule_result_sync

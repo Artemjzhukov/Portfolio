@@ -100,28 +100,37 @@ def schedule_result_sync(
     telegram_url: Optional[str] = None,
     notify: Optional[Callable[[str], Any]] = None,
     dashboard_url: Optional[str] = None,
+    notion_dashboard_url: Optional[str] = None,
+    telegram_dashboard_url: Optional[str] = None,
     student_name: Optional[str] = None,
     chat_id: Optional[str] = None,
 ):
-    """Фоновая отправка Notion + Telegram. Возвращается сразу, исключений не кидает."""
+    """Фоновая отправка Notion + Telegram. Возвращается сразу, исключений не кидает.
+
+    Токены дашборда одноразовые, поэтому ссылки для ученика и учителя — разные:
+    `telegram_dashboard_url` (пуш ученику) и `notion_dashboard_url` (строка CRM).
+    Старый `dashboard_url` остаётся как общий фолбэк для обоих.
+    """
     send = sender or _default_sender
 
     def _work() -> None:
         job_id = getattr(record, "job_id", "unknown")
-        dash = dashboard_url or f"https://example.com/dashboard/{job_id}"
+        fallback_dash = dashboard_url or f"https://example.com/dashboard/{job_id}"
+        notion_dash = notion_dashboard_url or fallback_dash
+        telegram_dash = telegram_dashboard_url or fallback_dash
         sname = student_name or str(getattr(record, "student_id", "ученик"))
         cid = chat_id or "0"
         targets: list[tuple[str, Any]] = []
         if notion_url:
             try:
-                targets.append((notion_url, build_notion_payload(record, student_name=sname, dashboard_url=dash).model_dump()))
+                targets.append((notion_url, build_notion_payload(record, student_name=sname, dashboard_url=notion_dash).model_dump()))
             except Exception as exc:  # noqa: BLE001
                 logger.warning("sync notion payload build failed: %s", exc)
                 if notify is not None:
                     _safe_notify(notify, str(exc))
         if telegram_url:
             try:
-                targets.append((telegram_url, build_result_message(record, chat_id=cid, dashboard_url=dash).model_dump()))
+                targets.append((telegram_url, build_result_message(record, chat_id=cid, dashboard_url=telegram_dash).model_dump()))
             except Exception as exc:  # noqa: BLE001 — напр. chat_id не похож на Telegram-ID
                 logger.warning("sync telegram payload build failed: %s", exc)
                 if notify is not None:
