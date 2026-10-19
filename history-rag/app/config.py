@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     api_key: str = ""                      # shared secret для n8n; пусто = авторизация выключена
     jobs_db_path: str = "assessment_jobs.db"  # SQLite store джоб (idempotency/аудит)
 
+    # --- Фоновый синк результатов (фаза 8) ---
+    # Generic HTTPS-эндпоинты, принимающие JSON NotionSyncPayload / TelegramResultMessage.
+    # На практике это webhook'и n8n-релея (он уже умеет доставлять в Notion/Telegram),
+    # поэтому прямой вызов Telegram Bot API здесь не зашит. Пусто = синк выключен.
+    notion_webhook_url: str = Field(
+        default="",
+        description="Куда POST'ить NotionSyncPayload после оценки. Пусто = не отправлять.",
+    )
+    telegram_webhook_url: str = Field(
+        default="",
+        description="Куда POST'ить TelegramResultMessage после оценки. Пусто = не отправлять.",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

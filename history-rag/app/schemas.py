@@ -105,6 +105,14 @@ class SubmissionInput(BaseModel):
         default=None, min_length=1, max_length=200,
         description="Название теста (напр. 'Вариант 3'); если пусто — '{subject_id} · {дата оценки}'.",
     )
+    telegram_chat_id: Optional[str] = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^\S+$",
+        description="Telegram chat_id ученика для push-результата. Если не задан — пуш не отправляется, результат доступен через /results/{job_id}.",
+    )
+    student_name: Optional[str] = Field(
+        default=None, min_length=1, max_length=200,
+        description="Имя ученика для Notion CRM учителя. Если не задано — используется student_id.",
+    )
     answer_key: Optional[dict[str, str]] = Field(
         default=None,
         description="Эталонные ответы: номер задачи -> ответ. Опционально: если не заданы, "

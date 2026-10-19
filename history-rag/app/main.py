@@ -132,11 +132,13 @@ def _run_job(
     payload_dict: dict,
     file_bytes: bytes,
     file_name: str | None,
+    settings: Settings | None = None,
 ) -> None:
     """Фоновая джоба: результат ИЛИ ошибка всегда попадают в store (никаких тихих пропаж).
 
     После set_done сохраняем EvaluationRecord в results из того же объекта
-    AssessmentResult — новых вызовов LLM/Qdrant здесь нет.
+    AssessmentResult — новых вызовов LLM/Qdrant здесь нет — и планируем
+    неблокирующий синк Notion/Telegram (только если настроены вебхуки).
     """
     from app.schemas import EvaluationRecord
 
@@ -145,10 +147,46 @@ def _run_job(
         payload = SubmissionInput(**payload_dict)
         result = pipeline.run(payload, file_bytes, file_name, job_id=job_id)
         store.set_done(job_id, result.model_dump())
-        store.save_result(EvaluationRecord.from_assessment(job_id, result, test_name=payload.test_name))
+        record = EvaluationRecord.from_assessment(job_id, result, test_name=payload.test_name)
+        store.save_result(record)
+        _schedule_result_sync(store, record, payload, settings or get_settings())
     except Exception as exc:  # noqa: BLE001 — ошибка джобы это данные для n8n, не краш
         logger.exception("job=%s pipeline failure", job_id)
         store.set_error(job_id, f"{type(exc).__name__}: {exc}")
+
+
+def _schedule_result_sync(
+    store: JobStore,
+    record,  # EvaluationRecord
+    payload: SubmissionInput,
+    settings: Settings,
+) -> None:
+    """Планирует фоновый синк после успешной оценки. Без вебхуков — тихий пропуск.
+
+    Токен дашборда одноразовый: для Telegram-пуша выпускаем его здесь (revoke
+    старых + issue) и встраиваем готовую ссылку в оба пейлоада.
+    """
+    notion_url = (settings.notion_webhook_url or "").strip()
+    telegram_url = (settings.telegram_webhook_url or "").strip()
+    if not notion_url and not telegram_url:
+        return
+    from app.dashboard_routes import build_dashboard_url
+    from app.services.notify import schedule_result_sync
+
+    chat_id = payload.telegram_chat_id or payload.student_id
+    store.revoke_tokens(payload.student_id, chat_id)
+    raw_token = store.issue_token(payload.student_id, chat_id)
+    dashboard_url = build_dashboard_url(settings, payload.student_id, raw_token)
+    logger.info("job=%s sync scheduled: chat=%s", record.job_id, chat_id)
+    schedule_result_sync(
+        record,
+        notion_url=notion_url or None,
+        telegram_url=telegram_url or None,
+        dashboard_url=dashboard_url,
+        student_name=payload.student_name or payload.student_id,
+        chat_id=chat_id,
+        notify=lambda text: logger.warning("job=%s %s", record.job_id, text),
+    )
 
 
 @app.post("/process-submission/async")
