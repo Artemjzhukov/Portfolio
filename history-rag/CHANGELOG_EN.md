@@ -310,4 +310,23 @@ insensitive); order: teacher file → auto-media, deduped by URL.
 there is no "learned" criterion; the standalone "Materials" block is no
 longer needed — everything lives inside topic rows. 186 tests green.
 
+## Phase 8 — Background result sync: Notion + Telegram push (`78131ea`)
+
+`app/services/notify.py`: `build_result_message` (short
+"Вариант проверен! Ваш результат: X из Y (Z%)", up to 5 problem tasks,
+HTML-escaped, 4096 cap, dashboard link as a separate field only),
+`build_notion_payload` (CRM row: student, test, score, %, ISO date,
+`dashboard_url`, `job_id`, review flag), `schedule_result_sync` (daemon thread:
+returns instantly, network errors swallowed into log + callback, each channel
+built independently — one failing never cancels the other).
+- Input extended: `SubmissionInput.telegram_chat_id` + `student_name`
+  (optional; no chat means no push).
+- After `save_result`, `_run_job` issues a one-time dashboard token
+  (revoke + issue) and schedules the sync into `NOTION_WEBHOOK_URL` /
+  `TELEGRAM_WEBHOOK_URL` (generic HTTPS n8n relay webhooks; empty = quiet
+  skip). 200 tests green.
+- The n8n workflow is now a thin relay: it accepts ready-made JSON and
+  delivers it to Notion/Telegram; remove the duplicate text rendering in n8n.
+
+
 
