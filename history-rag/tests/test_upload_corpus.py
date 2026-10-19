@@ -53,6 +53,20 @@ class TestCollectDocuments:
         docs = collect_documents(tmp_path, limit=2)
         assert len(docs) == 2
 
+    def test_temp_office_files_skipped(self, tmp_path):
+        (tmp_path / "~$lock.docx").write_bytes(b"fake")
+        (tmp_path / "real.txt").write_text("настоящий текст", encoding="utf-8")
+        docs = collect_documents(tmp_path)
+        assert len(docs) == 1
+        assert docs[0]["source"].startswith("real.txt#")
+
+    def test_broken_file_does_not_abort_run(self, tmp_path):
+        (tmp_path / "broken.docx").write_bytes(b"not a zip at all")
+        (tmp_path / "good.txt").write_text("хороший текст", encoding="utf-8")
+        docs = collect_documents(tmp_path)
+        assert len(docs) == 1
+        assert docs[0]["source"].startswith("good.txt#")
+
 class TestImages:
     def test_collect_images_copies_and_captions(self, tmp_path):
         media = tmp_path / "media"

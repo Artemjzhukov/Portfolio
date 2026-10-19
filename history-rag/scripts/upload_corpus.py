@@ -22,6 +22,9 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 SUPPORTED = {".txt", ".md", ".docx", ".pdf"}
+# Старый бинарный Word (.doc) python-docx не читает — такие файлы считаем
+# отдельно и честно сообщаем, а не молча пропускаем.
+LEGACY_DOC = {".doc"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 _YEAR_RE = re.compile(r"(1[0-9]{3}|20[0-9]{2})")
 
@@ -107,10 +110,19 @@ def collect_documents(
 ) -> list[dict]:
     """Обходит каталог, извлекает текст, режет на чанки, валидирует метаданные."""
     files = sorted(
-        p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED
+        p for p in root.rglob("*")
+        if p.is_file() and p.suffix.lower() in SUPPORTED
+        and not p.name.startswith("~$")
     )
     if limit:
         files = files[:limit]
+    legacy = sorted(
+        p for p in root.rglob("*")
+        if p.is_file() and p.suffix.lower() in LEGACY_DOC
+        and not p.name.startswith("~$")
+    )
+    if legacy:
+        print(f"  [внимание] .doc без конвертации ({len(legacy)}): " + ", ".join(p.name for p in legacy[:5]))
     if not files:
         return []
 
@@ -122,7 +134,11 @@ def collect_documents(
 
     documents: list[dict] = []
     for path in files:
-        text = extract_text(path).strip()
+        try:
+            text = extract_text(path).strip()
+        except Exception as exc:
+            print(f"  [пропуск, битый] {path.name} ({type(exc).__name__})")
+            continue
         if not text:
             print(f"  [пропуск, пусто] {path.name}")
             continue
