@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 from functools import lru_cache
@@ -214,7 +215,7 @@ def process_submission_async(
         student_id=payload.student_id,
         subject_id=payload.subject_id,
         submission_type=payload.submission_type,
-        file_hash=file_bytes.hex()[:32],
+        file_hash=hashlib.sha256(file_bytes).hexdigest(),
     )
 
     if existing_result is not None:  # уже посчитано — мгновенный ответ, без повторной оплаты LLM

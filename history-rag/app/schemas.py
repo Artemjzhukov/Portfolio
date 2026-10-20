@@ -118,6 +118,11 @@ class SubmissionInput(BaseModel):
         description="Эталонные ответы: номер задачи -> ответ. Опционально: если не заданы, "
         "берутся из data/answer_keys/{subject_id}.json (файл побеждает только при пустом payload).",
     )
+    year_variant: str = Field(
+        default="2025",
+        description="Год варианта (демо/реал/тест): рубрика берётся из task_{N}_{год}.json, "
+        "fallback — task_{N}.json. Напр. '2025', '2024', 'demo-2025'.",
+    )
 
     @field_validator("file_bytes")
     @classmethod

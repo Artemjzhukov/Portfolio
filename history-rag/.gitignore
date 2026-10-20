@@ -10,3 +10,4 @@ data/*
 .env
 .pytest_cache/
 assessment_jobs.db
+/corpus_raw

@@ -92,19 +92,52 @@ class EGEEvaluator:
     # Загрузка рубрик
     # ------------------------------------------------------------------
 
-    def load_rubrics(self, subject_id: str) -> dict[int, TaskRubric]:
+    def load_rubrics(self, subject_id: str, year_variant: str | None = None) -> dict[int, TaskRubric]:
+        """Рубрики предмета с приоритетом года варианта.
+
+        Файлы: task_{N}_{год}.json побеждает task_{N}.json; fallback без года —
+        с year_variant внутри файла. Несовпадение года внутри файла с именем
+        (когда год в имени есть) — громкая ошибка, а не тихая неверная оценка.
+        """
         rubric_dir = Path(self.s.criteria_dir) / subject_id
         if not rubric_dir.is_dir():
             return {}
-        rubrics: dict[int, TaskRubric] = {}
+        by_number: dict[int, dict[str, Path]] = {}
         for path in sorted(rubric_dir.glob("task_*.json")):
-            match = re.fullmatch(r"task_(\d+)\.json", path.name)
+            match = re.fullmatch(r"task_(\d+)(?:_(.+))?\.json", path.name)
             if not match:
                 continue
-            rubric = TaskRubric.model_validate_json(path.read_text(encoding="utf-8"))
+            number = int(match.group(1))
+            year = match.group(2)  # None = файл без года
+            by_number.setdefault(number, {})[year or ""] = path
+        rubrics: dict[int, TaskRubric] = {}
+        for number, variants in by_number.items():
+            chosen: Path | None = None
+            if year_variant and year_variant in variants:
+                chosen = variants[year_variant]
+            elif "" in variants:
+                chosen = variants[""]
+            else:
+                # ближайший имеющийся год вместо запрошенного
+                fallback_year = sorted(variants)[0]
+                chosen = variants[fallback_year]
+                logger.warning(
+                    "rubric %s task %d: год %s не найден, взят %s (%s)",
+                    subject_id, number, year_variant, fallback_year, chosen.name,
+                )
+            rubric = TaskRubric.model_validate_json(chosen.read_text(encoding="utf-8"))
             if rubric.subject_id != subject_id:
                 raise ValueError(
-                    f"{path}: subject_id в файле ('{rubric.subject_id}') != папке ('{subject_id}')"
+                    f"{chosen}: subject_id в файле ('{rubric.subject_id}') != папке ('{subject_id}')"
+                )
+            file_year = re.fullmatch(r"task_\d+_(.+)\.json", chosen.name)
+            if file_year and rubric.year_variant != file_year.group(1):
+                raise ValueError(
+                    f"{chosen}: year_variant внутри ('{rubric.year_variant}') != году в имени ('{file_year.group(1)}')"
+                )
+            if rubric.task_number != number:
+                raise ValueError(
+                    f"{chosen}: task_number внутри ({rubric.task_number}) != номеру в имени ({number})"
                 )
             rubrics[rubric.task_number] = rubric
         return rubrics

@@ -44,11 +44,11 @@ def ege_payload(answer=None):
     )
 
 
-def llm_verdict(k1_points=2, k2_points=1):
+def llm_verdict(k1_points=1, k2_points=1):
     return {
         "criteria_evaluations": [
             {"criterion_id": "K1", "earned_points": k1_points,
-             "quote_from_answer": "цитата", "deduction_reason_ru": "" if k1_points == 2 else "не всё"},
+             "quote_from_answer": "цитата", "deduction_reason_ru": "" if k1_points == 1 else "не всё"},
             {"criterion_id": "K2", "earned_points": k2_points,
              "quote_from_answer": "цитата", "deduction_reason_ru": "" if k2_points == 1 else "нет связи"},
         ],
@@ -82,18 +82,21 @@ class TestOpenRouterConfig:
 
 class TestEGEEvaluator:
     def test_valid_evaluation(self, settings, rubric_task19):
-        evaluator = EGEEvaluator(llm=FakeLLM([llm_verdict()]), settings=settings)
+        evaluator = EGEEvaluator(llm=FakeLLM([llm_verdict(), llm_verdict()]), settings=settings)
         result = evaluator.evaluate_task(rubric_task19, "ответ ученика")
-        assert result.earned(rubric_task19) == 3
+        assert result.earned(rubric_task19) == 2
+        assert not result.needs_human_review
+        result = evaluator.evaluate_task(rubric_task19, "ответ ученика")
+        assert result.earned(rubric_task19) == 2
         assert not result.needs_human_review
 
     def test_invalid_then_retry(self, settings, rubric_task19):
-        # первая попытка: вне ступеней (3 при max 2) -> отброшена; вторая: валидна
+        # первая попытка: вне ступеней (5 при max 1) -> отброшена; вторая: валидна
         bad = llm_verdict()
-        bad["criteria_evaluations"][0]["earned_points"] = 3
+        bad["criteria_evaluations"][0]["earned_points"] = 5
         evaluator = EGEEvaluator(llm=FakeLLM([bad, llm_verdict()]), settings=settings)
         result = evaluator.evaluate_task(rubric_task19, "ответ")
-        assert result.earned(rubric_task19) == 3
+        assert result.earned(rubric_task19) == 2
         assert len(evaluator.llm.calls) == 2
 
     def test_both_invalid_flags_review(self, settings, rubric_task19):
@@ -126,30 +129,102 @@ class TestEGEEvaluator:
 
     def test_load_rubrics_from_disk(self, settings):
         evaluator = EGEEvaluator(llm=FakeLLM(), settings=settings)
-        rubrics = evaluator.load_rubrics("history")
-        assert 19 in rubrics
-        assert rubrics[19].max_points == 3
+        rubrics = evaluator.load_rubrics("history", "2025")
+        assert set(rubrics) == {18, 19, 20, 21}
+        assert rubrics[18].max_points == 3  # причинно-следственные связи
+        assert rubrics[19].max_points == 2  # понятие + факт
+        assert rubrics[20].max_points == 3  # сравнение
+        assert rubrics[21].max_points == 3  # аргументация
+        assert all(r.year_variant == "2025" for r in rubrics.values())
 
-    def test_borderline_median_of_three_votes(self, settings, rubric_task19):
-        """K1 спорный (1 из 2): голоса 1, 0, 2 -> медиана 1, выбирается первый вердикт с медианой."""
+    def test_year_priority_over_unyearned(self, settings, tmp_path):
+        """task_{N}_{год}.json побеждает task_{N}.json при запросе этого года."""
+        import json
+
+        from app.schemas import TaskRubric
+
+        d = tmp_path / "criteria" / "subj"
+        d.mkdir(parents=True)
+        base = {
+            "schema_version": 1, "subject_id": "subj", "task_number": 1,
+            "max_points": 1, "part": 2,
+            "criteria": [{"criterion_id": "K1", "title_ru": "T", "description_ru": "D",
+                          "max_points": 1,
+                          "deduction_ladder": [{"points": 0, "condition_ru": "нет"},
+                                               {"points": 1, "condition_ru": "да"}]}],
+        }
+        (d / "task_1.json").write_text(json.dumps({**base, "year_variant": "2024"}), encoding="utf-8")
+        (d / "task_1_2025.json").write_text(json.dumps({**base, "year_variant": "2025"}), encoding="utf-8")
+        settings.criteria_dir = tmp_path / "criteria"
+        evaluator = EGEEvaluator(llm=FakeLLM(), settings=settings)
+        assert evaluator.load_rubrics("subj", "2025")[1].year_variant == "2025"
+        assert evaluator.load_rubrics("subj", "2024")[1].year_variant == "2024"
+
+    def test_year_mismatch_in_file_is_loud_error(self, settings, tmp_path):
+        """Год в имени != году внутри — ValueError, а не тихая неверная оценка."""
+        import json
+
+        import pytest
+
+        d = tmp_path / "criteria" / "subj"
+        d.mkdir(parents=True)
+        (d / "task_1_2025.json").write_text(json.dumps({
+            "schema_version": 1, "subject_id": "subj", "task_number": 1,
+            "year_variant": "2024", "max_points": 1, "part": 2,
+            "criteria": [{"criterion_id": "K1", "title_ru": "T", "description_ru": "D",
+                          "max_points": 1,
+                          "deduction_ladder": [{"points": 0, "condition_ru": "нет"},
+                                               {"points": 1, "condition_ru": "да"}]}],
+        }), encoding="utf-8")
+        settings.criteria_dir = tmp_path / "criteria"
+        evaluator = EGEEvaluator(llm=FakeLLM(), settings=settings)
+        with pytest.raises(ValueError, match="year_variant"):
+            evaluator.load_rubrics("subj", "2025")
+
+    def test_borderline_median_of_three_votes(self, settings):
+        """K1 спорный (1 из 2): голоса 1, 2, 0 -> медиана 1. Итог K1=1 + K2=1."""
+        from app.schemas import RubricCriterion, TaskRubric
+
+        rubric = TaskRubric(
+            schema_version=1, subject_id="history", task_number=19,
+            year_variant="2025", max_points=3, part=2,
+            criteria=[
+                RubricCriterion(
+                    criterion_id="K1", title_ru="T1", description_ru="D1", max_points=2,
+                    deduction_ladder=[
+                        {"points": 0, "condition_ru": "нет"},
+                        {"points": 1, "condition_ru": "часть"},
+                        {"points": 2, "condition_ru": "всё"},
+                    ],
+                ),
+                RubricCriterion(
+                    criterion_id="K2", title_ru="T2", description_ru="D2", max_points=1,
+                    deduction_ladder=[
+                        {"points": 0, "condition_ru": "нет"},
+                        {"points": 1, "condition_ru": "да"},
+                    ],
+                ),
+            ],
+        )
         settings.consistency_votes = 3
         votes = []
-        for k1 in (1, 0, 2):
+        for k1 in (1, 2, 0):
             votes.append({
                 "criteria_evaluations": [
                     {"criterion_id": "K1", "earned_points": k1,
                      "quote_from_answer": "цитата",
                      "deduction_reason_ru": "" if k1 == 2 else "не всё"},
-                    {"criterion_id": "K2", "earned_points": 1},
+                    {"criterion_id": "K2", "earned_points": 1,
+                     "quote_from_answer": "", "deduction_reason_ru": ""},
                 ],
                 "uncovered_answer_fragments": [],
                 "review_reasons_ru": [],
             })
         evaluator = EGEEvaluator(llm=FakeLLM(votes), settings=settings)
-        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        result = evaluator.evaluate_task(rubric, "ответ")
         k1 = next(e for e in result.criteria_evaluations if e.criterion_id == "K1")
         assert k1.earned_points == 1
-        assert result.earned(rubric_task19) == 2  # K1=1 + K2=1
+        assert result.earned(rubric) == 2  # K1=1 (медиана [2,1,0]) + K2=1
         assert len(evaluator.llm.calls) == 3
 
     def test_social_studies_rubric_valid(self, settings):
@@ -171,14 +246,14 @@ class TestPipelineEGE:
     def test_rubric_and_key_tasks_combined(self, settings, tmp_path):
         from app.schemas import ExtractedSubmission, OCRSegment, SubmissionInput
 
-        # изолируем набор рубрик (в data/criteria/history теперь 18, 19, 20, 21)
+        # изолируем набор рубрик (копия task_19_2025.json как task_19.json)
         import shutil
 
         settings.criteria_dir = tmp_path / "criteria"
         (settings.criteria_dir / "history").mkdir(parents=True)
         shutil.copy(
-            "data/criteria/history/task_19.json",
-            settings.criteria_dir / "history" / "task_19.json",
+            "data/criteria/history/task_19_2025.json",
+            settings.criteria_dir / "history" / "task_19_2025.json",
         )
 
         fake = FakeLLM([llm_verdict(k1_points=1, k2_points=1)])
@@ -200,7 +275,7 @@ class TestPipelineEGE:
         result = pipeline.run(payload, b"x", "work.txt")
 
         assert result.total_score == 3.0  # K1=1 + K2=1 (задача 19) + 1 (задача 1 по ключу)
-        assert result.max_possible_score == 4.0  # 3 (рубрика) + 1 (ключ)
+        assert result.max_possible_score == 3.0  # 2 (рубрика) + 1 (ключ)
         assert not result.needs_human_review
 
     def test_no_rubrics_warning(self, settings):
@@ -366,6 +441,51 @@ class TestAPI:
         assert resp3.status_code == 200
         assert resp3.json()["reused"] is True
         assert resp3.json()["result"]["total_score"] == 1.0
+
+    def test_async_stores_sha256_of_full_file(self, client, settings, tmp_path, monkeypatch):
+        """В jobs.file_hash — SHA-256 всего файла, а не hex первых 16 байт.
+
+        Два файла с общим 16-байтным префиксом при старом коде давали
+        одинаковый file_hash (коллизия аудита); job_id при этом различался.
+        """
+        import base64
+        import hashlib
+
+        from app.jobs import JobStore
+        from app.schemas import AssessmentResult
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        class RealStubPipeline:
+            def run(self, payload, file_bytes, file_name, job_id=None):
+                return AssessmentResult(
+                    student_id=payload.student_id, subject_id=payload.subject_id,
+                    submission_type=payload.submission_type,
+                    total_score=1, max_possible_score=1, percentage=0,
+                    summary_feedback="ok",
+                )
+
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: RealStubPipeline())
+
+        prefix = b"A" * 16
+        file_a = prefix + b"XXX-answers"
+        file_b = prefix + b"YYY-answers"
+        assert file_a.hex()[:32] == file_b.hex()[:32]  # старый код давал коллизию
+
+        def post(content: bytes):
+            return client.post("/process-submission/async", json=dict(
+                file_bytes=base64.b64encode(content).decode(), file_name="w.txt",
+                submission_type="standard_test",
+                subject_id="history", student_id="s1", answer_key={"1": "3"},
+            ))
+
+        job_a = post(file_a).json()["job_id"]
+        job_b = post(file_b).json()["job_id"]
+        assert job_a != job_b
+
+        store = JobStore(settings.jobs_db_path)
+        assert store.get(job_a)["file_hash"] == hashlib.sha256(file_a).hexdigest()
+        assert store.get(job_b)["file_hash"] == hashlib.sha256(file_b).hexdigest()
 
     def test_async_error_stored_not_lost(self, client, settings, tmp_path, monkeypatch):
         settings.jobs_db_path = str(tmp_path / "jobs.db")

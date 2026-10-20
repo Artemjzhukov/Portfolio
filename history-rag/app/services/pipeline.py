@@ -230,12 +230,19 @@ class AssessmentPipeline:
         self, payload: SubmissionInput, extracted: ExtractedSubmission,
         warnings: list[str], effective_key: dict[str, str],
     ) -> list[TaskBreakdown]:
-        rubrics = self.ege.load_rubrics(payload.subject_id)
+        rubrics = self.ege.load_rubrics(payload.subject_id, payload.year_variant)
         if not rubrics:
             warnings.append(
                 f"Для предмета '{payload.subject_id}' не найдено ни одной рубрики в "
                 f"{self.ege.s.criteria_dir}/{payload.subject_id} — задания не оценивались."
             )
+        else:
+            years = {r.year_variant for r in rubrics.values()}
+            if payload.year_variant not in years:
+                warnings.append(
+                    f"Рубрики года '{payload.year_variant}' не найдены — оценка по "
+                    f"имеющимся вариантам ({', '.join(sorted(years))}). Сверьте год варианта."
+                )
         answer_key = effective_key
         segments = {s.task_number: s for s in extracted.segments if s.task_number is not None}
         numeric = set(segments) | set(rubrics) | {int(k) for k in answer_key if str(k).strip().isdigit()}

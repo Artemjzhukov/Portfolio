@@ -82,7 +82,7 @@ class TestExtractedSubmission:
 
 class TestRubrics:
     def test_valid_rubric(self, rubric_task19):
-        assert rubric_task19.max_points == 3
+        assert rubric_task19.max_points == 2
         assert rubric_task19.criteria[0].criterion_id == "K1"
 
     def test_ladder_must_reach_max(self):
@@ -157,7 +157,7 @@ class TestEvaluation:
         k1 = rubric_task19.criterion("K1")
         with pytest.raises(ValueError, match="обоснование не допускается"):
             validate_evaluation(
-                CriterionEvaluation(criterion_id="K1", earned_points=2, deduction_reason_ru="всё ок"),
+                CriterionEvaluation(criterion_id="K1", earned_points=1, deduction_reason_ru="всё ок"),
                 k1,
             )
 

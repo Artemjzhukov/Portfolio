@@ -47,5 +47,5 @@ def settings() -> Settings:
 @pytest.fixture
 def rubric_task19() -> TaskRubric:
     return TaskRubric.model_validate_json(
-        (BASE_DIR / "data" / "criteria" / "history" / "task_19.json").read_text("utf-8")
+        (BASE_DIR / "data" / "criteria" / "history" / "task_19_2025.json").read_text("utf-8")
     )

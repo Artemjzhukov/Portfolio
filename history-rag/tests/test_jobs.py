@@ -111,8 +111,8 @@ class TestComputeJobId:
 
         settings.criteria_dir = tmp_path / "criteria"
         (settings.criteria_dir / "history").mkdir(parents=True)
-        src = settings.criteria_dir / "history" / "task_19.json"
-        original = Path("data/criteria/history/task_19.json").read_text(encoding="utf-8")
+        src = settings.criteria_dir / "history" / "task_19_2025.json"
+        original = Path("data/criteria/history/task_19_2025.json").read_text(encoding="utf-8")
         src.write_text(original, encoding="utf-8")
 
         payload = make_payload(submission_type="ege_exam")
