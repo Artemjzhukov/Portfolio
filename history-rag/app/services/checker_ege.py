@@ -23,7 +23,7 @@ from app.schemas import (
     TaskRubric,
     validate_evaluation,
 )
-from app.services.llm import LLMClient
+from app.services.llm import LLMClient, LLMVerdictError
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +183,15 @@ class EGEEvaluator:
         if problems:  # одна повторная попытка с явным перечнем проблем
             verdicts = self._evaluate_once(rubric, student_answer, problems=problems)
             problems = self._collect_problems(rubric, verdicts)
+
+        # Полностью невалидный вердикт после исчерпания попыток — техническая
+        # ошибка (LLM_INVALID_VERDICT), а не 0 баллов ученику. Ноль остаётся
+        # только результатом состоявшейся оценки.
+        if not verdicts:
+            raise LLMVerdictError(
+                f"LLM_INVALID_VERDICT: task={rubric.task_number} "
+                f"вердикт невалиден после 2 попыток: {'; '.join(problems) or 'пусто'}"
+            )
 
         review_reasons: list[str] = list(problems)
 

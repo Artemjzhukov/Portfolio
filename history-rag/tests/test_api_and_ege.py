@@ -99,14 +99,37 @@ class TestEGEEvaluator:
         assert result.earned(rubric_task19) == 2
         assert len(evaluator.llm.calls) == 2
 
-    def test_both_invalid_flags_review(self, settings, rubric_task19):
+    def test_both_invalid_raises_verdict_error(self, settings, rubric_task19):
+        """Обе попытки невалидны -> LLMVerdictError, а не 0 баллов как оценка."""
+        from app.services.llm import LLMVerdictError
+
         bad = llm_verdict()
-        bad["criteria_evaluations"] = [{"criterion_id": "K1", "earned_points": 9,
-                                        "quote_from_answer": "q", "deduction_reason_ru": "r"}]
+        bad["criteria_evaluations"] = [
+            {"criterion_id": "K1", "earned_points": 9,
+             "quote_from_answer": "q", "deduction_reason_ru": "r"},
+        ]
         evaluator = EGEEvaluator(llm=FakeLLM([bad, bad]), settings=settings)
-        result = evaluator.evaluate_task(rubric_task19, "ответ")
-        assert result.needs_human_review
+        with pytest.raises(LLMVerdictError, match="LLM_INVALID_VERDICT"):
+            evaluator.evaluate_task(rubric_task19, "ответ")
+
+    def test_second_attempt_valid_scores(self, settings, rubric_task19):
+        """Первая попытка битая, вторая валидна -> оценка по второй, без ошибки."""
+        bad = llm_verdict()
+        bad["criteria_evaluations"] = [
+            {"criterion_id": "K1", "earned_points": 9,
+             "quote_from_answer": "q", "deduction_reason_ru": "r"},
+        ]
+        evaluator = EGEEvaluator(llm=FakeLLM([bad, llm_verdict()]), settings=settings)
+        result = evaluator.evaluate_task(rubric_task19, "ответ ученика")
+        assert result.earned(rubric_task19) == 2
+        assert not result.needs_human_review
+
+    def test_empty_answer_scores_zero_without_llm(self, settings, rubric_task19):
+        """Пустой ответ -> 0 баллов состоявшейся оценкой, LLM не вызывается."""
+        evaluator = EGEEvaluator(llm=FakeLLM([]), settings=settings)
+        result = evaluator.evaluate_task(rubric_task19, "   ")
         assert result.earned(rubric_task19) == 0
+        assert len(evaluator.llm.calls) == 0
 
     def test_empty_answer_no_llm(self, settings, rubric_task19):
         evaluator = EGEEvaluator(llm=FakeLLM(), settings=settings)
@@ -486,6 +509,50 @@ class TestAPI:
         store = JobStore(settings.jobs_db_path)
         assert store.get(job_a)["file_hash"] == hashlib.sha256(file_a).hexdigest()
         assert store.get(job_b)["file_hash"] == hashlib.sha256(file_b).hexdigest()
+
+    def test_async_verdict_error_stored(self, client, settings, tmp_path, monkeypatch):
+        """Сквозной: дважды невалидный вердикт -> status=error, LLM_INVALID_VERDICT.
+
+        Проверяет сохранённое состояние задания (GET /results) и отсутствие
+        записи в results (балла нет — оценка не состоялась).
+        """
+        from app.jobs import JobStore
+
+        settings.jobs_db_path = str(tmp_path / "jobs.db")
+
+        bad = llm_verdict()
+        bad["criteria_evaluations"] = [
+            {"criterion_id": "K1", "earned_points": 9,
+             "quote_from_answer": "q", "deduction_reason_ru": "r"},
+        ]
+        pipeline = TestPipelineEGE()._pipeline(settings, FakeLLM([bad, bad]))
+
+        from app.schemas import ExtractedSubmission, OCRSegment
+
+        class FixedExtraction:
+            def extract(self, *, file_bytes, file_name):
+                return ExtractedSubmission(
+                    source_type="plain_text",
+                    segments=[OCRSegment(task_number=19, text="развернутый ответ")],
+                )
+
+        pipeline.extraction = FixedExtraction()
+        monkeypatch.setattr(main_module, "_build_pipeline", lambda: pipeline)
+
+        import base64 as _b64
+        resp = client.post("/process-submission/async", json=dict(
+            file_bytes=_b64.b64encode("№19 Какой-то текст".encode()).decode(),
+            file_name="work.txt", submission_type="ege_exam",
+            subject_id="history", student_id="chat-1", answer_key={"1": "3"},
+        ))
+        assert resp.status_code == 202
+        job_id = resp.json()["job_id"]
+
+        status = client.get(f"/results/{job_id}").json()
+        assert status["status"] == "error"
+        assert "LLM_INVALID_VERDICT" in (status["error"] or "")
+        assert status["result"] is None
+        assert JobStore(settings.jobs_db_path).get_result_record(job_id) is None
 
     def test_async_error_stored_not_lost(self, client, settings, tmp_path, monkeypatch):
         settings.jobs_db_path = str(tmp_path / "jobs.db")

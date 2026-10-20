@@ -23,6 +23,10 @@ class LLMOutputError(LLMError):
     """LLM доступна, но вернула невалидный JSON после всех попыток."""
 
 
+class LLMVerdictError(LLMError):
+    """LLM доступна, но вердикт невалиден после всех попыток (код LLM_INVALID_VERDICT)."""
+
+
 class LLMClient(Protocol):
     def chat(
         self,
