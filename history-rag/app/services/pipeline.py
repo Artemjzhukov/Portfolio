@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def _breakdown_from_ege(
-    rubric, evaluation, student_answer: str, retriever: TheoryRetriever, subject_id: str
+    rubric, evaluation, student_answer: str, retriever: TheoryRetriever, subject_id: str,
+    warnings: list[str] | None = None,
 ) -> TaskBreakdown:
     earned = evaluation.earned(rubric)
     by_id = {e.criterion_id: e for e in evaluation.criteria_evaluations}
@@ -41,6 +42,14 @@ def _breakdown_from_ege(
         and crit.max_points - by_id[crit.criterion_id].earned_points > 0
     )
     rec = retriever.recommend(subject_id, rubric.task_number, query) if query.strip() else None
+    # Недоступность рекомендаций по теории — только в warnings, review-флаг
+    # за неё не ставится: основанием для review служит лишь невыполненный
+    # обязательный фактчек (см. checker_ege).
+    if rec is not None and rec.unavailable_reason and warnings is not None:
+        warnings.append(
+            f"Задание {rubric.task_number}: рекомендации материалов недоступны "
+            f"({rec.unavailable_reason}). Оценка выполнена, ручная проверка не требуется."
+        )
     return TaskBreakdown(
         task_number=rubric.task_number,
         max_points=rubric.max_points,
@@ -91,6 +100,8 @@ def build_telegram_short(result_data: dict) -> str:
 
     if result_data.get("needs_human_review"):
         lines.append("\n⚠️ Часть оценок требует проверки преподавателем.")
+    if any("rag_unavailable" in w or "factcheck_unavailable" in w for w in result_data.get("warnings", [])):
+        lines.append("🔍 Проверка фактов была недоступна — часть критериев ждёт учителя.")
     if len(problems) < len([t for t in result_data["task_breakdown"] if t["status"] != "Correct"]):
         lines.append("\n… и другие — полный разбор в файле и в Notion.")
     else:
@@ -256,9 +267,21 @@ class AssessmentPipeline:
             if num in rubrics:
                 rubric = rubrics[num]
                 evaluation = self.ege.evaluate_task(rubric, student_answer)
+                for ce in evaluation.criteria_evaluations:
+                    if ce.factcheck_status == "unavailable":
+                        reason = next(
+                            (r for r in evaluation.review_reasons_ru
+                             if f"критерию {ce.criterion_id}" in r),
+                            "причина не зафиксирована",
+                        )
+                        warnings.append(
+                            f"Задание {num}, критерий {ce.criterion_id}: "
+                            f"обязательный фактчек не выполнен ({reason})"
+                        )
                 breakdowns.append(
                     _breakdown_from_ege(
-                        rubric, evaluation, student_answer, self.retriever, payload.subject_id
+                        rubric, evaluation, student_answer, self.retriever, payload.subject_id,
+                        warnings,
                     )
                 )
                 continue

@@ -138,9 +138,14 @@ class TestEGEEvaluator:
         assert evaluator.llm.calls == []
 
     def test_factcheck_failure_sets_review(self, settings, rubric_task19):
+        from app.schemas import FactCheckResult
+
         class FailFactCheck:
             def check(self, quote, topics):
                 return None
+
+            def check_detailed(self, quote, topics):
+                return FactCheckResult(status="unconfirmed")
 
         evaluator = EGEEvaluator(
             llm=FakeLLM([llm_verdict(k1_points=1, k2_points=0)]),
@@ -301,6 +306,50 @@ class TestPipelineEGE:
         assert result.max_possible_score == 3.0  # 2 (рубрика) + 1 (ключ)
         assert not result.needs_human_review
 
+    def test_pipeline_propagates_factcheck_and_recommendation(self, settings):
+        """6. Сквозной: unavailable фактчек -> review + warnings + пометка в telegram_short;
+        недоступные рекомендации -> warnings, но БЕЗ review за них."""
+        from app.schemas import ExtractedSubmission, OCRSegment, SubmissionInput
+        from app.services.rag import FactChecker
+
+        class DeadRetriever:
+            unavailable_reason = "RAG недоступен (Qdrant localhost:6333): refused"
+
+            def search(self, *a, **k):
+                return []
+
+            def recommend(self, subject_id, task_number, query_text):
+                from app.schemas import RAGRecommendation
+                return RAGRecommendation(
+                    task_number=task_number, query_text=query_text,
+                    unavailable_reason=self.unavailable_reason,
+                )
+
+        pipeline = self._pipeline(
+            settings, FakeLLM([llm_verdict(k1_points=1, k2_points=0)]),
+        )
+        dead = DeadRetriever()
+        pipeline.retriever = dead
+        pipeline.ege.factcheck = FactChecker(dead)
+
+        extracted = ExtractedSubmission(
+            source_type="plain_text",
+            segments=[OCRSegment(task_number=19, text="развернутый ответ")],
+        )
+
+        class FixedExtraction:
+            def extract(self, *, file_bytes, file_name):
+                return extracted
+
+        pipeline.extraction = FixedExtraction()
+        result = pipeline.run(SubmissionInput(**ege_payload()), b"x", "work.txt")
+
+        assert result.needs_human_review  # основание — невыполненный фактчек
+        assert any("rag_unavailable" in w for w in result.warnings)
+        assert "Проверка фактов была недоступна" in result.telegram_short
+        assert any("рекомендации материалов недоступны" in w for w in result.warnings)
+        assert result.total_score == 1.0  # K1=1 + K2=0: баллы не пересчитаны
+
     def test_no_rubrics_warning(self, settings):
         from app.schemas import ExtractedSubmission, OCRSegment, SubmissionInput
 
@@ -321,6 +370,110 @@ class TestPipelineEGE:
         result = pipeline.run(payload, b"x", "work.txt")
         assert result.needs_human_review
         assert any("рубрики" in w for w in result.warnings)
+
+
+class TestFactCheckStatuses:
+    """П.5: четыре статуса фактчека, различимые сквозно до результата."""
+
+    def _k2_deducted(self):
+        # K2 снижен (0 из 1) с цитатой и topics -> фактчек обязателен
+        return llm_verdict(k1_points=1, k2_points=0)
+
+    def test_unavailable_rag_sets_review(self, settings, rubric_task19):
+        """1. RAG недоступен -> unavailable + review + причина rag_unavailable."""
+        from app.services.rag import FactChecker
+
+        class DeadRetriever:
+            unavailable_reason = "RAG недоступен (Qdrant localhost:6333): refused"
+
+            def search(self, *a, **k):
+                return []
+
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([self._k2_deducted()]), settings=settings,
+            factcheck=FactChecker(DeadRetriever()),
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
+        assert k2.factcheck_status == "unavailable"
+        assert result.needs_human_review
+        assert any("rag_unavailable" in r for r in result.review_reasons_ru)
+        assert result.earned(rubric_task19) == 1  # баллы не пересчитываем
+
+    def test_unconfirmed_keeps_review_without_unavailable_text(self, settings, rubric_task19):
+        """2. Поиск выполнен, подтверждения нет -> unconfirmed, без лжи про недоступность."""
+        from app.services.rag import FactChecker
+
+        class EmptyRetriever:
+            unavailable_reason = ""
+
+            def search(self, *a, **k):
+                return []
+
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([self._k2_deducted()]), settings=settings,
+            factcheck=FactChecker(EmptyRetriever()),
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
+        assert k2.factcheck_status == "unconfirmed"
+        assert result.needs_human_review
+        assert any("не подтверждено" in r for r in result.review_reasons_ru)
+        assert not any("недоступ" in r for r in result.review_reasons_ru)
+        assert any("не опровержение" in r for r in result.review_reasons_ru)
+
+    def test_confirmed_no_factcheck_review(self, settings, rubric_task19):
+        """3. Подтверждение найдено -> confirmed, review по фактчеку нет."""
+        from app.schemas import RAGChunk
+        from app.services.rag import FactChecker
+
+        class GoodRetriever:
+            unavailable_reason = ""
+
+            def search(self, *a, **k):
+                return [RAGChunk(text="крепостное право отменено в 1861 году")]
+
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([self._k2_deducted()]), settings=settings,
+            factcheck=FactChecker(GoodRetriever()),
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
+        assert k2.factcheck_status == "confirmed"
+        assert not result.needs_human_review
+
+    def test_not_required_no_check_call(self, settings, rubric_task19):
+        """4. Снижения нет -> not_required, проверка не вызывается, review нет."""
+        from app.services.rag import FactChecker
+
+        calls: list = []
+
+        class SpyRetriever:
+            unavailable_reason = ""
+
+            def search(self, *a, **k):
+                calls.append((a, k))
+                return []
+
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([llm_verdict()]), settings=settings,
+            factcheck=FactChecker(SpyRetriever()),
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        assert calls == []
+        assert all(e.factcheck_status == "not_required" for e in result.criteria_evaluations)
+        assert not result.needs_human_review
+
+    def test_missing_factcheck_dependency_is_unavailable(self, settings, rubric_task19):
+        """5. factcheck=None при обязательном фактчеке -> unavailable, не молчание."""
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([self._k2_deducted()]), settings=settings, factcheck=None,
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
+        assert k2.factcheck_status == "unavailable"
+        assert result.needs_human_review
+        assert any("factcheck_unavailable" in r for r in result.review_reasons_ru)
 
 
 @pytest.fixture

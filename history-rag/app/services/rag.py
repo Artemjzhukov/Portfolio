@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 
 from app.config import Settings
-from app.schemas import RAGChunk, RAGRecommendation
+from app.schemas import FactCheckResult, RAGChunk, RAGRecommendation
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +18,37 @@ logger = logging.getLogger(__name__)
 class FactChecker:
     """Проверка фактических утверждений по хранилищу (для ЕГЭ-оценщика)."""
 
-    def __init__(self, retriever: "TheoryRetriever") -> None:
+    def __init__(self, retriever: "TheoryRetriever | None") -> None:
         self.retriever = retriever
 
-    def check(self, quote: str, topics: list[str]) -> str | None:
-        """Returns: релевантный фрагмент хранилища или None, если не подтверждено."""
+    def check_detailed(self, quote: str, topics: list[str]) -> FactCheckResult:
+        """Различимый исход: confirmed / unconfirmed / unavailable.
+
+        unavailable — ретривер не передан (зависимость отсутствует) или поиск
+        не выполнен (RAG недоступен). unconfirmed — поиск выполнен, но
+        подтверждение не найдено; это НЕ опровержение утверждения.
+        """
+        if self.retriever is None:
+            return FactCheckResult(
+                status="unavailable", reason="factcheck_unavailable: зависимость factcheck не передана"
+            )
         query = f"{quote} {' '.join(topics)}".strip()
         chunks = self.retriever.search("history", query, k=2)
+        unavailable = getattr(self.retriever, "unavailable_reason", "")
         if not chunks:
-            return None
-        return chunks[0].text
+            if unavailable:
+                return FactCheckResult(status="unavailable", reason=f"rag_unavailable: {unavailable}")
+            return FactCheckResult(status="unconfirmed")
+        return FactCheckResult(status="confirmed", evidence=chunks[0].text)
+
+    def check(self, quote: str, topics: list[str]) -> str | None:
+        """Returns: релевантный фрагмент хранилища или None, если не подтверждено.
+
+        Совместимость: unavailable и unconfirmed по-прежнему дают None —
+        различие доступно через check_detailed().
+        """
+        result = self.check_detailed(quote, topics)
+        return result.evidence if result.status == "confirmed" else None
 
 
 class TheoryRetriever:

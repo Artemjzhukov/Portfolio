@@ -199,17 +199,35 @@ class EGEEvaluator:
         if self.s.consistency_votes > 1:
             verdicts = self._reconcile_borderline(rubric, student_answer, verdicts)
 
-        # Фактчек сниженных критериев через RAG: только ДОБАВЛЯЕТ review-флаги.
-        if self.factcheck is not None:
-            for ce in verdicts:
-                crit = rubric.criterion(ce.criterion_id)
-                deducted = crit.max_points - ce.earned_points
-                if deducted > 0 and crit.factcheck_topics and ce.quote_from_answer.strip():
-                    if self.factcheck.check(ce.quote_from_answer, crit.factcheck_topics) is None:
-                        review_reasons.append(
-                            f"Утверждение по критерию {crit.criterion_id} не подтверждено "
-                            f"хранилищем материалов — требуется проверка преподавателя."
-                        )
+        # Фактчек сниженных критериев через RAG: только ДОБАВЛЯЕТ review-флаги,
+        # баллы не меняет. Статусы: confirmed / unconfirmed / unavailable / not_required.
+        for ce in verdicts:
+            crit = rubric.criterion(ce.criterion_id)
+            deducted = crit.max_points - ce.earned_points
+            if not (deducted > 0 and crit.factcheck_topics and ce.quote_from_answer.strip()):
+                ce.factcheck_status = "not_required"
+                continue
+            if self.factcheck is None:
+                ce.factcheck_status = "unavailable"
+                review_reasons.append(
+                    f"Фактчек по критерию {crit.criterion_id} не выполнен "
+                    f"(factcheck_unavailable: зависимость factcheck не передана) "
+                    f"— требуется проверка преподавателя."
+                )
+                continue
+            outcome = self.factcheck.check_detailed(ce.quote_from_answer, crit.factcheck_topics)
+            ce.factcheck_status = outcome.status
+            if outcome.status == "unavailable":
+                review_reasons.append(
+                    f"Фактчек по критерию {crit.criterion_id} не выполнен "
+                    f"({outcome.reason}) — требуется проверка преподавателя."
+                )
+            elif outcome.status == "unconfirmed":
+                review_reasons.append(
+                    f"Утверждение по критерию {crit.criterion_id} не подтверждено "
+                    f"хранилищем материалов (подтверждение не найдено — это не опровержение) "
+                    f"— требуется проверка преподавателя."
+                )
 
         if review_reasons:
             logger.warning(

@@ -230,6 +230,25 @@ class TaskRubric(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# Статус фактчека сниженного критерия (общий контракт, не только неуспех):
+# confirmed — проверка выполнена, подтверждение найдено;
+# unconfirmed — проверка выполнена, подтверждение НЕ найдено
+#   (не означает «утверждение опровергнуто»);
+# unavailable — обязательная проверка не выполнена (нет зависимости/поиска);
+# not_required — по правилам проверка не требовалась.
+FactCheckStatus = Literal["confirmed", "unconfirmed", "unavailable", "not_required"]
+
+
+class FactCheckResult(BaseModel):
+    """Исход одной проверки: различимы подтверждение, его отсутствие и невыполнение."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: FactCheckStatus
+    evidence: str = Field(default="", description="Найденный фрагмент (только при confirmed).")
+    reason: str = Field(default="", description="Диагностика при unavailable (что именно недоступно).")
+
+
 class CriterionEvaluation(BaseModel):
     """Вердикт LLM по одному критерию."""
 
@@ -243,6 +262,11 @@ class CriterionEvaluation(BaseModel):
     )
     deduction_reason_ru: str = Field(
         default="", description="Причина снижения на русском; пусто, если балл не снижен."
+    )
+    factcheck_status: FactCheckStatus = Field(
+        default="not_required",
+        description="Статус фактчека: confirmed/unconfirmed/unavailable/not_required. "
+        "unconfirmed НЕ означает опровержение — только отсутствие подтверждения.",
     )
 
 
