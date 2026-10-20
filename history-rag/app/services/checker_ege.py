@@ -200,7 +200,7 @@ class EGEEvaluator:
             verdicts = self._reconcile_borderline(rubric, student_answer, verdicts)
 
         # Фактчек сниженных критериев через RAG: только ДОБАВЛЯЕТ review-флаги,
-        # баллы не меняет. Статусы: confirmed / unconfirmed / unavailable / not_required.
+        # баллы не меняет. Статусы: retrieval_hit / unconfirmed / unavailable / not_required.
         for ce in verdicts:
             crit = rubric.criterion(ce.criterion_id)
             deducted = crit.max_points - ce.earned_points

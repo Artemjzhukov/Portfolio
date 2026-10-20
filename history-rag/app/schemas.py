@@ -231,13 +231,13 @@ class TaskRubric(BaseModel):
 
 
 # Статус фактчека сниженного критерия (общий контракт, не только неуспех):
-# confirmed — поиск выполнен, релевантные материалы найдены
+# retrieval_hit — поиск вернул материалы
 #   (это НЕ верифицированное подтверждение истинности утверждения);
-# unconfirmed — поиск выполнен, релевантные материалы НЕ найдены
+# unconfirmed — поиск выполнен, материалы НЕ найдены
 #   (не означает «утверждение опровергнуто»);
 # unavailable — обязательная проверка не выполнена (нет зависимости/поиска);
 # not_required — по правилам проверка не требовалась.
-FactCheckStatus = Literal["confirmed", "unconfirmed", "unavailable", "not_required"]
+FactCheckStatus = Literal["retrieval_hit", "unconfirmed", "unavailable", "not_required"]
 
 
 class FactCheckResult(BaseModel):
@@ -246,7 +246,7 @@ class FactCheckResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: FactCheckStatus
-    evidence: str = Field(default="", description="Найденный фрагмент (только при confirmed).")
+    evidence: str = Field(default="", description="Найденный фрагмент (только при retrieval_hit).")
     reason: str = Field(default="", description="Диагностика при unavailable (что именно недоступно).")
 
 
@@ -266,8 +266,8 @@ class CriterionEvaluation(BaseModel):
     )
     factcheck_status: FactCheckStatus = Field(
         default="not_required",
-        description="Статус фактчека: confirmed/unconfirmed/unavailable/not_required. "
-        "confirmed = найдены релевантные материалы (не верификация истинности); "
+        description="Статус фактчека: retrieval_hit/unconfirmed/unavailable/not_required. "
+        "retrieval_hit = поиск вернул материалы (не верификация истинности); "
         "unconfirmed НЕ означает опровержение — только отсутствие материалов.",
     )
 

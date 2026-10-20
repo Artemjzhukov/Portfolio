@@ -22,13 +22,13 @@ class FactChecker:
         self.retriever = retriever
 
     def check_detailed(self, quote: str, topics: list[str]) -> FactCheckResult:
-        """Различимый исход: confirmed / unconfirmed / unavailable.
+        """Различимый исход: retrieval_hit / unconfirmed / unavailable.
 
         unavailable — ретривер не передан (зависимость отсутствует) или поиск
-        не выполнен (RAG недоступен). confirmed — поиск выполнен и вернул
-        релевантные чанки; это НЕ верификация истинности утверждения, а лишь
-        наличие материалов. unconfirmed — поиск выполнен, но релевантного не
-        найдено; это НЕ опровержение утверждения.
+        не выполнен (RAG недоступен). retrieval_hit — поиск вернул материалы;
+        это НЕ верификация истинности утверждения, а лишь наличие материалов.
+        unconfirmed — поиск выполнен, но материалов не найдено; это НЕ
+        опровержение утверждения.
         """
         if self.retriever is None:
             return FactCheckResult(
@@ -41,7 +41,7 @@ class FactChecker:
             if unavailable:
                 return FactCheckResult(status="unavailable", reason=f"rag_unavailable: {unavailable}")
             return FactCheckResult(status="unconfirmed")
-        return FactCheckResult(status="confirmed", evidence=chunks[0].text)
+        return FactCheckResult(status="retrieval_hit", evidence=chunks[0].text)
 
     def check(self, quote: str, topics: list[str]) -> str | None:
         """Returns: релевантный фрагмент хранилища или None, если не найдено.
@@ -50,7 +50,7 @@ class FactChecker:
         различие доступно через check_detailed().
         """
         result = self.check_detailed(quote, topics)
-        return result.evidence if result.status == "confirmed" else None
+        return result.evidence if result.status == "retrieval_hit" else None
 
 
 class TheoryRetriever:

@@ -401,7 +401,7 @@ class TestFactCheckStatuses:
         assert result.earned(rubric_task19) == 1  # баллы не пересчитываем
 
     def test_unconfirmed_keeps_review_without_unavailable_text(self, settings, rubric_task19):
-        """2. Поиск выполнен, подтверждения нет -> unconfirmed, без лжи про недоступность."""
+        """2. Поиск выполнен, материалов нет -> unconfirmed, без лжи про недоступность."""
         from app.services.rag import FactChecker
 
         class EmptyRetriever:
@@ -453,12 +453,12 @@ class TestFactCheckStatuses:
         assert result.needs_human_review
         assert any("K2 не оценён" in r for r in result.review_reasons_ru)
 
-    def test_confirmed_no_factcheck_review(self, settings, rubric_task19):
-        """3. Релевантный чанк найден -> confirmed, review по фактчеку нет.
+    def test_retrieval_hit_no_factcheck_review(self, settings, rubric_task19):
+        """3. Поиск вернул материалы -> retrieval_hit, review по фактчеку нет.
 
-        confirmed означает только наличие материалов, а не верифицированную
+        retrieval_hit означает только наличие материалов, а не верифицированную
         истинность утверждения: даже чанк, не подтверждающий цитату,
-        даёт confirmed (ретривер не выносит вердикт об истинности).
+        даёт retrieval_hit (ретривер не выносит вердикт об истинности).
         """
         from app.schemas import RAGChunk
         from app.services.rag import FactChecker
@@ -476,7 +476,7 @@ class TestFactCheckStatuses:
         )
         result = evaluator.evaluate_task(rubric_task19, "ответ")
         k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
-        assert k2.factcheck_status == "confirmed"
+        assert k2.factcheck_status == "retrieval_hit"
         assert not result.needs_human_review
 
     def test_not_required_no_check_call(self, settings, rubric_task19):
