@@ -153,7 +153,7 @@ class TestEGEEvaluator:
         )
         result = evaluator.evaluate_task(rubric_task19, "ответ")
         assert result.needs_human_review
-        assert any("не подтверждено" in r for r in result.review_reasons_ru)
+        assert any("релевантные материалы" in r for r in result.review_reasons_ru)
 
     def test_load_rubrics_from_disk(self, settings):
         evaluator = EGEEvaluator(llm=FakeLLM(), settings=settings)
@@ -418,12 +418,48 @@ class TestFactCheckStatuses:
         k2 = next(e for e in result.criteria_evaluations if e.criterion_id == "K2")
         assert k2.factcheck_status == "unconfirmed"
         assert result.needs_human_review
-        assert any("не подтверждено" in r for r in result.review_reasons_ru)
+        assert any("релевантные материалы" in r for r in result.review_reasons_ru)
         assert not any("недоступ" in r for r in result.review_reasons_ru)
         assert any("не опровержение" in r for r in result.review_reasons_ru)
 
+    def test_deduction_without_quote_never_reaches_factcheck(self, settings, rubric_task19):
+        """Снижение без цитаты отсекается валидацией раньше фактчека.
+
+        Вердикт без цитаты отбрасывается в _evaluate_once (validate_evaluation),
+        критерий попадает в problems как «не оценён», фактчек по нему не
+        вызывается. Частично валидный итог (K1) + review по K2 — это поведение
+        пункта 2 (LLMVerdictError только при полностью пустом вердикте).
+        """
+        from app.services.rag import FactChecker
+
+        calls: list = []
+
+        class SpyRetriever:
+            unavailable_reason = ""
+
+            def search(self, *a, **k):
+                calls.append((a, k))
+                return []
+
+        no_quote = llm_verdict(k1_points=1, k2_points=0)
+        no_quote["criteria_evaluations"][1]["quote_from_answer"] = "   "
+        evaluator = EGEEvaluator(
+            llm=FakeLLM([no_quote, no_quote]), settings=settings,
+            factcheck=FactChecker(SpyRetriever()),
+        )
+        result = evaluator.evaluate_task(rubric_task19, "ответ")
+        # K2 без цитаты не прошёл валидацию -> фактчек не вызывался вообще
+        assert calls == []
+        assert result.needs_human_review
+        assert any("K2 не оценён" in r for r in result.review_reasons_ru)
+
     def test_confirmed_no_factcheck_review(self, settings, rubric_task19):
-        """3. Подтверждение найдено -> confirmed, review по фактчеку нет."""
+        """3. Релевантный чанк найден -> confirmed, review по фактчеку нет.
+
+        confirmed означает только наличие материалов, а не верифицированную
+        истинность утверждения: даже чанк, не подтверждающий цитату,
+        даёт confirmed (ретривер не выносит вердикт об истинности).
+        """
         from app.schemas import RAGChunk
         from app.services.rag import FactChecker
 
@@ -431,7 +467,8 @@ class TestFactCheckStatuses:
             unavailable_reason = ""
 
             def search(self, *a, **k):
-                return [RAGChunk(text="крепостное право отменено в 1861 году")]
+                # чанк из хранилища есть, но цитату ученика не подтверждает
+                return [RAGChunk(text="рецепт борща: свёкла, капуста, мясо")]
 
         evaluator = EGEEvaluator(
             llm=FakeLLM([self._k2_deducted()]), settings=settings,

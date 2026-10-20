@@ -25,8 +25,10 @@ class FactChecker:
         """Различимый исход: confirmed / unconfirmed / unavailable.
 
         unavailable — ретривер не передан (зависимость отсутствует) или поиск
-        не выполнен (RAG недоступен). unconfirmed — поиск выполнен, но
-        подтверждение не найдено; это НЕ опровержение утверждения.
+        не выполнен (RAG недоступен). confirmed — поиск выполнен и вернул
+        релевантные чанки; это НЕ верификация истинности утверждения, а лишь
+        наличие материалов. unconfirmed — поиск выполнен, но релевантного не
+        найдено; это НЕ опровержение утверждения.
         """
         if self.retriever is None:
             return FactCheckResult(
@@ -42,7 +44,7 @@ class FactChecker:
         return FactCheckResult(status="confirmed", evidence=chunks[0].text)
 
     def check(self, quote: str, topics: list[str]) -> str | None:
-        """Returns: релевантный фрагмент хранилища или None, если не подтверждено.
+        """Returns: релевантный фрагмент хранилища или None, если не найдено.
 
         Совместимость: unavailable и unconfirmed по-прежнему дают None —
         различие доступно через check_detailed().
