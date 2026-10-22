@@ -230,6 +230,37 @@ def record_story_progress(conn, student_id: int, story_id: int, questions_score:
     return cur.lastrowid
 
 
+def complete_story(conn, student_id: int, story_id: int, questions_score: int,
+                   retell_transcript: str, retell_passed: bool, glossary: list[dict]):
+    """Atomically record story completion and create SRS cards from glossary.
+
+    All writes — the ``story_progress`` INSERT plus every ``srs_cards`` INSERT
+    derived from the glossary — succeed together or roll back together under a
+    single ``with conn`` transaction.  Network calls (Groq/Whisper) must happen
+    *before* this function is called; only DB writes are enclosed here, keeping
+    the transaction short and free of I/O.
+    """
+    from datetime import date, timedelta
+
+    due = str(date.today() + timedelta(days=1))
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO story_progress "
+            "(student_id, story_id, questions_score, retell_transcript, retell_passed) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (student_id, story_id, questions_score, retell_transcript,
+             1 if retell_passed else 0),
+        )
+        for item in glossary:
+            conn.execute(
+                "INSERT OR IGNORE INTO srs_cards "
+                "(student_id, word_en, word_ru, interval_index, due_date) "
+                "VALUES (?, ?, ?, 0, ?)",
+                (student_id, item["en"].strip(), item["ru"].strip(), due),
+            )
+        return cur.lastrowid
+
+
 
 def bump_usage(conn, student_id, day: str | None = None) -> int:
     from datetime import date

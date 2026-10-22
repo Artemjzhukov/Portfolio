@@ -127,7 +127,80 @@ async def test_story_retell_rejects_text(conn, st):
     await story_h.story_cmd(FakeMessage(text="/story"), st, conn, FakeLLM())
     await story_h.story_answer(FakeMessage(tg_id=42, text="1"), st, conn)
     await story_h.story_answer(FakeMessage(tg_id=42, text="2"), st, conn)
-    m = FakeMessage(tg_id=42, text="я пересказываю текстом")
+    m = FakeMessage(tg_id=42, text="я перескатываю ответ текстом")
     await story_h.story_retell(m, st, conn, FakeLLM())
     assert any("голосовое" in t.lower() for t in m.sent)
     assert st.state == story_h.StorySession.waiting_retell
+
+
+class FailingFakeLLM:
+    """LLM that raises on story generation (transcription still works)."""
+
+    async def chat_json_async(self, system, user):
+        raise RuntimeError("LLM exploded")
+
+    async def transcribe_async(self, path):
+        return "transcript"
+
+
+async def test_story_retell_transcription_failure_no_progress(conn, st, monkeypatch):
+    """Empty transcript (silence/noise) → retry prompt, no progress or SRS cards."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+    await story_h.story_cmd(FakeMessage(text="/story"), st, conn, FakeLLM())
+    await story_h.story_answer(FakeMessage(tg_id=42, text="1"), st, conn)
+    await story_h.story_answer(FakeMessage(tg_id=42, text="2"), st, conn)
+
+    import english_tutor.handlers.voice as voice_mod
+
+    async def silent_transcribe(message, bot, llm):
+        return ""  # Whisper returns nothing for silence
+
+    monkeypatch.setattr(voice_mod, "save_and_transcribe", silent_transcribe)
+    m = FakeMessage(tg_id=42, voice=type("V", (), {"duration": 5})())
+    m.text = None
+    await story_h.story_retell(m, st, conn, FakeLLM())
+    assert any("расслышал" in t.lower() for t in m.sent)
+    assert st.state == story_h.StorySession.waiting_retell
+    assert conn.execute("SELECT * FROM story_progress").fetchone() is None
+    assert conn.execute(
+        "SELECT * FROM srs_cards WHERE student_id=42"
+    ).fetchone() is None
+
+
+async def test_story_retell_transcription_error_no_progress(conn, st, monkeypatch):
+    """VoiceTranscribeError (service failure) → helpful retry, no DB writes, FSM kept."""
+    from english_tutor.handlers.voice import VoiceTranscribeError
+
+    db.upsert_student(conn, 42, status="active", level="A2")
+    await story_h.story_cmd(FakeMessage(text="/story"), st, conn, FakeLLM())
+    await story_h.story_answer(FakeMessage(tg_id=42, text="1"), st, conn)
+    await story_h.story_answer(FakeMessage(tg_id=42, text="2"), st, conn)
+
+    import english_tutor.handlers.voice as voice_mod
+
+    async def failing_transcribe(message, bot, llm):
+        raise VoiceTranscribeError("download/transcription failed")
+
+    monkeypatch.setattr(voice_mod, "save_and_transcribe", failing_transcribe)
+    m = FakeMessage(tg_id=42, voice=type("V", (), {"duration": 5})())
+    m.text = None
+    await story_h.story_retell(m, st, conn, FakeLLM())
+    # Helpful retry message (distinct from the "silence" message)
+    assert any("распозн" in t.lower() and "попробуй" in t.lower() for t in m.sent)
+    # FSM stays in waiting_retell so the learner can retry
+    assert st.state == story_h.StorySession.waiting_retell
+    # No story progress or SRS cards recorded
+    assert conn.execute("SELECT * FROM story_progress").fetchone() is None
+    assert conn.execute(
+        "SELECT * FROM srs_cards WHERE student_id=42"
+    ).fetchone() is None
+
+
+async def test_story_cmd_generation_failure_no_story(conn, st):
+    """LLM generation raises → user-friendly error, no story saved, FSM clean."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+    msg = FakeMessage(text="/story")
+    await story_h.story_cmd(msg, st, conn, FailingFakeLLM())
+    assert any("историй" in t.lower() or "сервис" in t.lower() for t in msg.sent)
+    assert st.state is None  # never entered answering_questions
+    assert conn.execute("SELECT * FROM stories").fetchone() is None

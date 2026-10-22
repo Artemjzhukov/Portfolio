@@ -1,3 +1,5 @@
+import pytest
+
 from english_tutor import db
 
 
@@ -69,3 +71,56 @@ def test_save_test_result(conn):
     db.save_test_result(conn, 5, written_score=13, voice_transcript="my day...", suggested_level="B1")
     row = conn.execute("SELECT * FROM test_results WHERE student_id=5").fetchone()
     assert (row["written_score"], row["suggested_level"]) == (13, "B1")
+
+
+def test_complete_story_records_progress_and_cards(conn):
+    """Atomic story completion: progress row + all SRS cards created together."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+    story_id = db.save_story(conn, 42, "A2", "coffee", '{"title": "Coffee"}')
+    glossary = [
+        {"en": "run out of", "ru": "закончиться"},
+        {"en": "get stuck", "ru": "застрять"},
+    ]
+    pid = db.complete_story(
+        conn, 42, story_id, questions_score=2,
+        retell_transcript="he ran out of coffee", retell_passed=True,
+        glossary=glossary,
+    )
+    assert pid > 0
+    prog = conn.execute(
+        "SELECT * FROM story_progress WHERE id=?", (pid,)
+    ).fetchone()
+    assert prog["questions_score"] == 2
+    assert prog["retell_passed"] == 1
+    assert "ran out of coffee" in prog["retell_transcript"]
+    cards = conn.execute(
+        "SELECT * FROM srs_cards WHERE student_id=42 ORDER BY word_en"
+    ).fetchall()
+    assert len(cards) == 2
+    assert {c["word_en"] for c in cards} == {"run out of", "get stuck"}
+
+
+def test_complete_story_rolls_back_on_failure(conn):
+    """If SRS card creation fails partway, no progress row or cards persist.
+
+    Simulates a mid-loop failure (e.g. DB locked, constraint violation, or
+    a malformed glossary item raising during insertion).  The ``with conn:``
+    transaction must roll back *every* write — including the story-progress
+    INSERT that succeeded before the failure.
+    """
+    db.upsert_student(conn, 42, status="active", level="A2")
+    story_id = db.save_story(conn, 42, "A2", "coffee", '{"title": "Coffee"}')
+    glossary = [
+        {"en": "run out of", "ru": "закончиться"},  # succeeds
+        {"en": None, "ru": "broken"},               # None.strip() → AttributeError
+    ]
+    with pytest.raises(AttributeError):
+        db.complete_story(
+            conn, 42, story_id, questions_score=2,
+            retell_transcript="test", retell_passed=True,
+            glossary=glossary,
+        )
+    assert conn.execute("SELECT * FROM story_progress").fetchall() == []
+    assert conn.execute(
+        "SELECT * FROM srs_cards WHERE student_id=42"
+    ).fetchall() == []

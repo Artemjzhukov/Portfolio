@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
-from english_tutor.services import limits, spine, srs, stories
+from english_tutor.services import limits, spine, stories
 from english_tutor.utils.telegram import split_for_telegram
 
 router = Router()
@@ -85,7 +85,7 @@ async def story_answer(message, state: FSMContext, conn):
 
 @router.message(StorySession.waiting_retell)
 async def story_retell(message, state: FSMContext, conn, llm):
-    from english_tutor.handlers.voice import save_and_transcribe
+    from english_tutor.handlers.voice import VoiceTranscribeError, save_and_transcribe
 
     data = await state.get_data()
     story = data.get("story")
@@ -106,17 +106,20 @@ async def story_retell(message, state: FSMContext, conn, llm):
         await message.answer("Дневной лимит запросов исчерпан, попробуй завтра. 🌙")
         return
     limits.register_llm_call(conn, message.from_user.id)
-    transcript = await save_and_transcribe(message, message.bot, llm)
+    try:
+        transcript = await save_and_transcribe(message, message.bot, llm)
+    except VoiceTranscribeError:
+        await message.answer("Не удалось распознать речь 🎤 Попробуй ещё раз.")
+        return
     if not transcript.strip():
         await message.answer("Не расслышал 🎤 Попробуй ещё раз.")
         return
     result = stories.evaluate_retell(story["target_chunk"], transcript)
     total = len(story["comprehension_questions"])
-    db.record_story_progress(
-        conn, message.from_user.id, story_id, correct, transcript, result["passed"]
+    db.complete_story(
+        conn, message.from_user.id, story_id, correct, transcript,
+        result["passed"], story.get("glossary", []),
     )
-    for item in story.get("glossary", []):
-        srs.ensure_card(conn, message.from_user.id, item["en"], item["ru"])
     await state.clear()
     await message.answer(
         f"📝 Расшифровка: {transcript}\n\n"
