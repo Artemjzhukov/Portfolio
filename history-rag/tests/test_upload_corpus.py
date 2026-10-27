@@ -1,5 +1,6 @@
 """Тесты загрузчика корпуса: извлечение, чанкинг, метаданные (без сети)."""
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -106,4 +107,51 @@ class TestImageUrl:
 
     def test_without_base(self):
         assert TheoryRetriever.image_url("", "t/p.jpg") == "t/p.jpg"
+
+
+class TestLegacyFormats:
+    """RTF попадает в обход, .doc честно сообщается как неподдержанный."""
+
+    def test_rtf_collected_with_encoding_metadata(self, tmp_path, make_rtf):
+        body = "Смутное время 1612"
+        path = tmp_path / "smuta.rtf"
+        path.write_bytes(make_rtf(body, 1251))
+        docs = collect_documents(tmp_path)
+        assert len(docs) == 1
+        doc = docs[0]
+        assert doc["content"] == body
+        assert doc["source"] == "smuta.rtf#1"
+        assert doc["source_format"] == "rtf"
+        assert doc["detected_format"] == "rtf"
+        assert doc["encoding"] == "cp1251"
+        assert doc["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def test_docx_collected_with_metadata(self, tmp_path, make_docx):
+        (tmp_path / "smuta.docx").write_bytes(make_docx(["Смутное время"]))
+        doc = collect_documents(tmp_path)[0]
+        assert doc["content"] == "Смутное время"
+        assert doc["source_format"] == "docx"
+        assert doc["detected_format"] == "docx"
+        assert doc["encoding"] is None
+
+    def test_doc_legacy_reported_not_silently_skipped(self, tmp_path, capsys):
+        (tmp_path / "old.doc").write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 32)
+        (tmp_path / "good.txt").write_text("текст", encoding="utf-8")
+        docs = collect_documents(tmp_path)
+        assert [d["source"] for d in docs] == ["good.txt#1"]
+        out = capsys.readouterr().out
+        assert ".doc без конвертации" in out
+        assert "old.doc" in out
+
+    def test_empty_docx_skipped_as_empty(self, tmp_path, make_docx):
+        (tmp_path / "zero.docx").write_bytes(make_docx([]))
+        (tmp_path / "good.txt").write_text("текст", encoding="utf-8")
+        docs = collect_documents(tmp_path)
+        assert [d["source"] for d in docs] == ["good.txt#1"]
+
+    def test_zero_byte_docx_skipped_as_broken(self, tmp_path):
+        (tmp_path / "zero_bytes.docx").write_bytes(b"")
+        (tmp_path / "good.txt").write_text("текст", encoding="utf-8")
+        docs = collect_documents(tmp_path)
+        assert [d["source"] for d in docs] == ["good.txt#1"]
 

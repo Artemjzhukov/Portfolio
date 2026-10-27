@@ -11,3 +11,5 @@ data/*
 .pytest_cache/
 assessment_jobs.db
 /corpus_raw
+/reports/dumps/
+/reports/ingestion_rtf_pilot.md

@@ -62,6 +62,147 @@ _TASK_LINE_PATTERNS = [
 ]
 
 
+class ExtractionError(ValueError):
+    """Файл не удалось извлечь: битый контейнер, пустые байты, сбой парсера.
+
+    Отдельный тип нужен, чтобы ingestion отличал «формат не поддерживается»
+    (ValueError диспетчера) от «файл повреждён» (это исключение) и мог записать
+    причину в отчёт, а не угадывать её по тексту сообщения.
+    """
+
+
+def _clean_text(text: str) -> str:
+    """Единый вид текста: LF-переводы, без хвостовых пробелов и пустых блоков."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n")
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+_SURROGATE_PAIR_RE = re.compile(r"[\ud800-\udbff][\udc00-\udfff]")
+
+
+def _fix_surrogate_pairs(text: str) -> str:
+    """Склеивает UTF-16-пары, которые оставляют \\u-escape'ы за пределами BMP.
+
+    В RTF \\uN задаёт ровно один UTF-16 code unit, поэтому символ вне BMP
+    (эмодзи, редкие иероглифы) приходит двумя code unit'ами. Если их не
+    соединить, в тексте остаются одиночные сурогаты: они не кодируются в UTF-8
+    и превращаются в «тофу» при записи в JSON или в payload Qdrant.
+    """
+    if not _SURROGATE_PAIR_RE.search(text):
+        return text
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if "\ud800" <= ch <= "\udbff" and i + 1 < len(text) and "\udc00" <= text[i + 1] <= "\udfff":
+            high, low = ord(ch) - 0xD800, ord(text[i + 1]) - 0xDC00
+            out.append(chr(0x10000 + (high << 10) + low))
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+# RTF объявляет кодовую страницу в заголовке (\ansicpgN), и именно ею закодированы
+# и \'hh-escape'ы, и «сырые» байты текста. Читать такой файл как latin-1 значит
+# получить мойибейк вместо кириллицы, поэтому кодировка берётся из документа.
+_RTF_CODEPAGES = {
+    866: "cp866",
+    874: "cp874",
+    932: "shift_jis",
+    936: "gbk",
+    949: "cp949",
+    950: "big5",
+    1250: "cp1250",
+    1251: "cp1251",
+    1252: "cp1252",
+    1253: "cp1253",
+    1254: "cp1254",
+    1255: "cp1255",
+    1256: "cp1256",
+    1257: "cp1257",
+    1258: "cp1258",
+    65001: "utf-8",
+}
+# Порядок фолбэка, когда \ansicpg не объявлен: корпус русский, поэтому cp1251
+# первым. Победитель выбирается по числу «битых» символов и количеству кириллицы,
+# а не «первый, который не упал» — иначе latin-1 всегда выигрывал бы.
+_RTF_FALLBACK_CODECS = ("cp1251", "cp1252", "utf-8")
+_ANSICPG_RE = re.compile(rb"\\ansicpg(\d+)")
+_ANSICPG_ANY_RE = re.compile(r"\\ansicpg\d+")
+
+
+def parse_rtf_codepage(head: bytes) -> Optional[str]:
+    """Кодек из \\ansicpgN; None, если кодировка в заголовке не объявлена."""
+    match = _ANSICPG_RE.search(head[:4096])
+    if not match:
+        return None
+    return _RTF_CODEPAGES.get(int(match.group(1)))
+
+
+def _decode_quality(text: str) -> tuple[int, int]:
+    """Ключ качества декодирования: меньше «битых» лучше, больше кириллицы лучше."""
+    cyrillic = sum(1 for ch in text if "\u0400" <= ch <= "\u04ff")
+    return (text.count("\ufffd"), -cyrillic)
+
+
+def _decode_rtf(file_bytes: bytes, declared: Optional[str]) -> tuple[str, str]:
+    """(текст, применённая кодировка): объявленная кодировка важнее эвристики."""
+    if declared:
+        return file_bytes.decode(declared, errors="replace"), declared
+    best: tuple[tuple[int, int], str, str] | None = None
+    for codec in _RTF_FALLBACK_CODECS:
+        decoded = file_bytes.decode(codec, errors="replace")
+        quality = _decode_quality(decoded)
+        if best is None or quality < best[0]:
+            best = (quality, decoded, codec)
+    if best is None:  # pragma: no cover — недостижимо при непустом списке кодеков
+        raise ExtractionError("не удалось определить кодировку RTF")
+    return best[1], best[2]
+
+
+def _align_ansicpg(text: str, codec: str) -> str:
+    """Приводит \\ansicpgN в заголовке к кодеку, которым мы реально декодировали.
+
+    striprtf сам разбирает \\ansicpg и ПЕРЕЗАПИСЫВАЕТ параметр encoding, а на
+    незнакомый номер молча подставляет utf8 (striprtf.py:296-301). Из-за этого
+    файл с \\ansicpg9999 падал на UnicodeDecodeError, хотя байты в порядке.
+    Выравнивание заголовка оставляет один источник истины — наш выбор кодека.
+    """
+    number = next((str(num) for num, name in _RTF_CODEPAGES.items() if name == codec), None)
+    if number is None:
+        return text
+    return _ANSICPG_ANY_RE.sub(lambda _match: "\\ansicpg" + number, text, count=1)
+
+
+def extract_rtf_text(file_bytes: bytes, file_name: str = "") -> tuple[str, str]:
+    """Текст RTF и фактически применённая кодировка.
+
+    Returns:
+        (text, applied_encoding) — кодировка кладётся в метаданные чанка, чтобы
+        при разборе проблем было видно, чем именно читали файл.
+    """
+    if not file_bytes:
+        raise ExtractionError("пустой файл RTF")
+    if not file_bytes.lstrip()[:5] == b"{\\rtf":
+        raise ExtractionError(f"не RTF: заголовок '{{\\\\rtf' не найден ({file_name or 'без имени'})")
+
+    from striprtf.striprtf import rtf_to_text
+
+    declared = parse_rtf_codepage(file_bytes)
+    decoded, applied = _decode_rtf(file_bytes, declared)
+    decoded = _align_ansicpg(decoded, applied)
+    try:
+        # errors="replace": в корпусе встречаются файлы с чужим \fcharset в
+        # таблице шрифтов; из-за одного байта ронять весь файл нельзя.
+        plain = rtf_to_text(decoded, encoding=applied, errors="replace")
+    except Exception as exc:  # striprtf на битом RTF кидает разные типы
+        raise ExtractionError(f"RTF не разобран ({file_name or 'без имени'}): {exc}") from exc
+    return _clean_text(_fix_surrogate_pairs(plain)), applied
+
+
 def detect_file_type(head: bytes, file_name: Optional[str] = None) -> str:
     """Определяем тип по магическим байтам; расширение — только fallback."""
     if head.startswith(b"%PDF"):
@@ -72,6 +213,12 @@ def detect_file_type(head: bytes, file_name: Optional[str] = None) -> str:
         return "image_jpg"
     if head.startswith(b"\x89PNG"):
         return "image_png"
+    if head.startswith(b"{\\rtf"):
+        return "rtf"
+    if head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        # OLE2-контейнер: Word 97-2003 (.doc). Читается только через конвертер,
+        # но тип определяем честно, чтобы отчёт не сваливал его в «unknown».
+        return "doc_legacy"
     ext = (file_name or "").rsplit(".", 1)[-1].lower() if file_name else ""
     if ext in ("jpg", "jpeg", "png", "webp"):
         return f"image_{ext}"
@@ -79,6 +226,10 @@ def detect_file_type(head: bytes, file_name: Optional[str] = None) -> str:
         return "pdf"
     if ext == "docx":
         return "docx"
+    if ext == "rtf":
+        return "rtf"
+    if ext == "doc":
+        return "doc_legacy"
     if ext in ("txt", "md"):
         return "txt"
     return "unknown"
@@ -90,16 +241,25 @@ def extract_pdf_pages(file_bytes: bytes) -> list[str]:
 
 
 def extract_docx_text(file_bytes: bytes) -> str:
+    """Текст DOCX через python-docx: абзацы + таблицы (в бланках ответы в таблицах).
+
+    DOCX — это OPC/ZIP-контейнер с word/document.xml, поэтому pypdf здесь
+    неприменим: он разбирает дерево страниц PDF и на ZIP ничего осмысленного не
+    вернёт. python-docx уже в зависимостях (requirements: python-docx==1.2.0).
+    """
     from docx import Document  # локальный импорт: пакет нужен только для docx
 
-    document = Document(io.BytesIO(file_bytes))
+    try:
+        document = Document(io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise ExtractionError(f"DOCX не открывается (не ZIP/OPC или повреждён): {exc}") from exc
     parts = [p.text for p in document.paragraphs if p.text.strip()]
     for table in document.tables:  # бланки ответов часто в таблицах
         for row in table.rows:
             cells = [c.text.strip() for c in row.cells if c.text.strip()]
             if cells:
                 parts.append(" | ".join(cells))
-    return "\n".join(parts)
+    return _clean_text("\n".join(parts))
 
 
 def merge_segments(segments: list[OCRSegment]) -> list[OCRSegment]:

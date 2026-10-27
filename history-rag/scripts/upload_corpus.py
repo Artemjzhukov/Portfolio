@@ -12,37 +12,73 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-SUPPORTED = {".txt", ".md", ".docx", ".pdf"}
-# Старый бинарный Word (.doc) python-docx не читает — такие файлы считаем
-# отдельно и честно сообщаем, а не молча пропускаем.
+SUPPORTED = {".txt", ".md", ".docx", ".pdf", ".rtf"}
+# Старый бинарный Word (.doc) python-docx не читает, а LibreOffice в этом патче
+# не участвует — такие файлы считаем отдельно и честно сообщаем, а не молча
+# пропускаем и не выдаём за обработанные.
 LEGACY_DOC = {".doc"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 _YEAR_RE = re.compile(r"(1[0-9]{3}|20[0-9]{2})")
 
 
-def extract_text(path: Path) -> str:
-    """Текст файла: txt/md напрямую, docx/pdf — через helpers из app/services/ocr."""
+@dataclass(frozen=True)
+class ExtractedSource:
+    """Результат извлечения одного файла: текст + чем он оказался на самом деле.
+
+    detected_format считается по магическим байтам, а не по расширению, поэтому
+    файл .rtf с HTML внутри честно помечается как unknown. encoding — фактически
+    применённая кодировка (для RTF берётся из \\ansicpgN в заголовке).
+    """
+
+    text: str
+    detected_format: str
+    encoding: Optional[str]
+    sha256: str
+
+
+def extract_source(path: Path) -> ExtractedSource:
+    """Текст файла и метаданные извлечения: единственное место чтения с диска."""
     suffix = path.suffix.lower()
+    raw = path.read_bytes()
+    from app.services.ocr import detect_file_type
+
+    detected = detect_file_type(raw[:8], path.name)
+    encoding: Optional[str] = None
     if suffix in (".txt", ".md"):
-        return path.read_text(encoding="utf-8", errors="replace")
-    if suffix == ".docx":
+        text = raw.decode("utf-8", errors="replace")
+        encoding = "utf-8"
+    elif suffix == ".rtf":
+        from app.services.ocr import extract_rtf_text
+
+        text, encoding = extract_rtf_text(raw, path.name)
+    elif suffix == ".docx":
         from app.services.ocr import extract_docx_text
 
-        return extract_docx_text(path.read_bytes())
-    if suffix == ".pdf":
+        text = extract_docx_text(raw)
+    elif suffix == ".pdf":
         from app.services.ocr import extract_pdf_pages
 
-        return "\n".join(extract_pdf_pages(path.read_bytes()))
-    raise ValueError(f"Неподдерживаемый формат: {path}")
+        text = "\n".join(extract_pdf_pages(raw))
+    else:
+        raise ValueError(f"Неподдерживаемый формат: {path}")
+    return ExtractedSource(text=text, detected_format=detected, encoding=encoding, sha256=hashlib.sha256(raw).hexdigest())
+
+
+def extract_text(path: Path) -> str:
+    """Только текст — прежний публичный API загрузчика."""
+    return extract_source(path).text
 
 
 def guess_meta(path: Path) -> dict:
@@ -135,7 +171,8 @@ def collect_documents(
     documents: list[dict] = []
     for path in files:
         try:
-            text = extract_text(path).strip()
+            source = extract_source(path)
+            text = source.text.strip()
         except Exception as exc:
             print(f"  [пропуск, битый] {path.name} ({type(exc).__name__})")
             continue
@@ -143,6 +180,7 @@ def collect_documents(
             print(f"  [пропуск, пусто] {path.name}")
             continue
         meta = guess_meta(path)
+        source_format = path.suffix.lower().lstrip(".")
         for i, chunk in enumerate(splitter.split_text(text)):
             documents.append(
                 {
@@ -150,9 +188,14 @@ def collect_documents(
                     "source": f"{path.name}#{i + 1}",
                     "topic": meta["topic"],
                     "doc_date": meta["doc_date"],
+                    "source_format": source_format,
+                    "detected_format": source.detected_format,
+                    "encoding": source.encoding,
+                    "sha256": source.sha256,
                 }
             )
-        print(f"  [ok] {path.name}: {len(text)} символов")
+        encoding_note = f", кодировка: {source.encoding}" if source.encoding else ""
+        print(f"  [ok] {path.name}: {len(text)} символов (формат: {source.detected_format}{encoding_note})")
     return documents
 
 

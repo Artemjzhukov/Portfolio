@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import List, Optional
 
 from dotenv import load_dotenv
@@ -38,6 +39,23 @@ class HistoricalDocument(BaseModel):
         description="Относительный путь к изображению в data/media (напр. 'reforms/portret.jpg'). "
         "Для фото/карт: вектор строится по подписи, файл лежит отдельно и раздаётся через /media.",
     )
+    source_format: Optional[str] = Field(
+        default=None,
+        description="Расширение исходного файла без точки: 'docx', 'pdf', 'rtf', 'txt'.",
+    )
+    detected_format: Optional[str] = Field(
+        default=None,
+        description="Формат по магическим байтам ('docx', 'rtf', 'doc_legacy', 'unknown'), "
+        "а не по расширению — расширение в корпусе врёт (14 .docx нулевого размера).",
+    )
+    encoding: Optional[str] = Field(
+        default=None,
+        description="Кодировка, которой файл фактически прочитан (для RTF — из \\ansicpgN).",
+    )
+    sha256: Optional[str] = Field(
+        default=None,
+        description="SHA-256 исходного файла: позволяет находить дубликаты между папками корпуса.",
+    )
 
     @field_validator("content")
     @classmethod
@@ -45,6 +63,21 @@ class HistoricalDocument(BaseModel):
         if not v.strip():
             raise ValueError("content must not be empty or whitespace-only")
         return v
+
+
+# Fixed namespace so point ids are stable across processes and machines: the same
+# file ingested twice must map onto the same Qdrant points (upsert, not duplicate).
+ID_NAMESPACE = uuid.UUID("6f5f6f2a-1c1e-4f3a-9c1a-2f9f0b7e5d31")
+
+
+def document_point_id(source: str, content: str) -> str:
+    """Deterministic Qdrant point id derived from (source, content).
+
+    Qdrant accepts only UUID or unsigned-int ids, hence uuid5 over a hash-like
+    name. Source is part of the key so identical text in two different files
+    keeps two distinct points instead of collapsing into one.
+    """
+    return str(uuid.uuid5(ID_NAMESPACE, f"{source}\x1f{content}"))
 
 
 class VectorDimensionConflict(Exception):
@@ -137,16 +170,27 @@ def get_vector_store() -> QdrantVectorStore:
 # 3. Ingestion — validates first, then attaches metadata for future citations
 # ---------------------------------------------------------------------------
 
-def add_documents_to_store(raw_documents: List[dict]) -> None:
+def add_documents_to_store(
+    raw_documents: List[dict],
+    *,
+    ids: Optional[List[str]] = None,
+    vector_store: Optional[QdrantVectorStore] = None,
+) -> List[str]:
     """
     Validates raw documents against HistoricalDocument before they ever reach
     the vector store. Rejects the whole batch with a clear, itemized error if
     any document fails validation, rather than silently ingesting bad data.
 
-    Also attaches source/topic/date as metadata on the resulting LangChain
-    Documents — this doesn't wire up citations in the answer yet (that's a
-    separate, still-open piece of work), but it means the data needed for
-    citations is captured at ingestion time rather than lost.
+    Point ids are deterministic (see document_point_id) and passed explicitly to
+    `add_documents(ids=...)`, which Qdrant applies as an upsert. Re-running the
+    ingestion over the same corpus therefore rewrites the same points instead of
+    appending duplicates — this is what makes the upload idempotent.
+
+    `vector_store` is an injection seam for tests: without it the function would
+    open a real Qdrant connection and build HuggingFace embeddings, which makes
+    an idempotency test impossible to run offline.
+
+    Returns the point ids that were written, in document order.
     """
     validated: List[HistoricalDocument] = []
     errors: List[str] = []
@@ -163,6 +207,11 @@ def add_documents_to_store(raw_documents: List[dict]) -> None:
             f"schema validation errors:\n" + "\n".join(errors)
         )
 
+    if ids is not None and len(ids) != len(validated):
+        raise ValueError(
+            f"ids length mismatch: expected {len(validated)} ids, got {len(ids)}"
+        )
+
     lc_documents = [
         Document(
             page_content=doc.content,
@@ -171,11 +220,21 @@ def add_documents_to_store(raw_documents: List[dict]) -> None:
                 "topic": doc.topic,
                 "date": doc.doc_date,
                 "image": doc.image,
+                "source_format": doc.source_format,
+                "detected_format": doc.detected_format,
+                "encoding": doc.encoding,
+                "sha256": doc.sha256,
             },
         )
         for doc in validated
     ]
 
-    vector_store = get_vector_store()
-    vector_store.add_documents(lc_documents)
+    point_ids = (
+        list(ids) if ids is not None
+        else [document_point_id(doc.source, doc.content) for doc in validated]
+    )
+
+    store = vector_store if vector_store is not None else get_vector_store()
+    store.add_documents(lc_documents, ids=point_ids)
     print(f"Added {len(lc_documents)} validated documents to the vector store.")
+    return point_ids
