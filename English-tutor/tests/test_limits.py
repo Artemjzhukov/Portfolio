@@ -44,12 +44,12 @@ def test_daily_quota_counts_up(conn):
 
 
 def test_daily_quota_resets_next_day(conn):
-    from datetime import date, timedelta
+    from datetime import datetime, timedelta, timezone
 
     from english_tutor import db
 
     limits.register_llm_call(conn, 1)
-    db.bump_usage(conn, 1, day=str(date.today() - timedelta(days=1)))
+    db.bump_usage(conn, 1, day=(datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat())
     assert limits.daily_left(conn, 1) == limits.DAILY_LLM_LIMIT - 1
 
 

@@ -5,6 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from english_tutor import db
 from english_tutor.services import invites, placement
+from english_tutor.utils.keyboards import admin_main_keyboard
 
 router = Router()
 
@@ -29,11 +30,14 @@ async def cancel(message, state: FSMContext):
 
 
 @router.message(CommandStart())
-async def start(message, state: FSMContext, conn):
+async def start(message, state, conn, admin_id=None):
     await state.clear()
     student = db.get_student(conn, message.from_user.id)
     if student and student["status"] == "active":
-        await message.answer("С возвращением! /lessons — уроки, /drill — задание на говорение.")
+        if message.from_user.id == admin_id:
+            await message.answer("С возвращением! /lessons — уроки.", reply_markup=admin_main_keyboard())
+        else:
+            await message.answer("С возвращением! /lessons — уроки, /drill — задание на говорение.")
         return
     await state.set_state(Registration.waiting_code)
     await message.answer("Доступ по приглашению. Введите код:")

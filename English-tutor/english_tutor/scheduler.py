@@ -14,6 +14,16 @@ REMINDER_TEXT = (
 )
 
 
+def build_reminder_text(due: int, conn, tg_id: int) -> str:
+    """Assemble the reminder message: base text + a contextual activity nudge."""
+    from english_tutor.services import stats
+
+    base = REMINDER_TEXT.format(due=due)
+    activity = stats.last_activity(conn, tg_id)
+    nudge = stats.format_activity_nudge(activity)
+    return base + "\n\n" + nudge
+
+
 def should_send(now_hhmmss: str, reminder_times: list[str]) -> str | None:
     """Return the slot (e.g. '13:00') that is due at this minute, else None."""
     hhmm = now_hhmmss[:5]
@@ -45,7 +55,7 @@ async def reminder_loop(bot, conn, config, admin_id: int, poll_seconds: int = 30
                     due = len(srs.due_cards(conn, student["tg_id"]))
                     try:
                         await bot.send_message(
-                            student["tg_id"], REMINDER_TEXT.format(due=due)
+                            student["tg_id"], build_reminder_text(due, conn, student["tg_id"])
                         )
                     except Exception:
                         logger.exception("reminder send failed for %s", student["tg_id"])

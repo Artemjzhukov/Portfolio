@@ -4,15 +4,31 @@ INTERVALS = [1, 3, 7, 14, 30]
 DEFAULT_BATCH = 10
 
 
-def ensure_card(conn, tg_id, word_en, word_ru) -> bool:
+def ensure_card(conn, tg_id, word_en, word_ru, material_id=None) -> bool:
     """Add a word to the learner's deck. Returns True if a new card was created."""
     cur = conn.execute(
-        "INSERT OR IGNORE INTO srs_cards (student_id, word_en, word_ru, interval_index, due_date) "
-        "VALUES (?, ?, ?, 0, ?)",
-        (tg_id, word_en.strip(), word_ru.strip(), str(date.today() + timedelta(days=1))),
+        "INSERT OR IGNORE INTO srs_cards (student_id, word_en, word_ru, interval_index, "
+        "due_date, material_id) "
+        "VALUES (?, ?, ?, 0, ?, ?)",
+        (tg_id, word_en.strip(), word_ru.strip(), str(date.today() + timedelta(days=1)), material_id),
     )
+    created = cur.rowcount == 1
+    if not created and material_id is not None:
+        conn.execute(
+            "UPDATE srs_cards SET material_id=COALESCE(material_id, ?) "
+            "WHERE student_id=? AND word_en=?",
+            (material_id, tg_id, word_en.strip()),
+        )
     conn.commit()
-    return cur.rowcount == 1
+    return created
+
+
+def due_cards_by_material(conn, tg_id, material_id, limit: int = DEFAULT_BATCH):
+    return conn.execute(
+        "SELECT * FROM srs_cards WHERE student_id=? AND material_id=? AND due_date<=? "
+        "ORDER BY due_date LIMIT ?",
+        (tg_id, material_id, str(date.today()), limit),
+    ).fetchall()
 
 
 def due_cards(conn, tg_id, limit: int = DEFAULT_BATCH):

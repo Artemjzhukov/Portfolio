@@ -97,7 +97,40 @@ CREATE TABLE IF NOT EXISTS story_progress (
     retell_passed INTEGER NOT NULL DEFAULT 1,
     completed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS active_story_sessions (
+    student_id INTEGER PRIMARY KEY REFERENCES students(tg_id),
+    story_id INTEGER NOT NULL REFERENCES stories(id),
+    stage TEXT NOT NULL CHECK (stage IN ('answering_questions', 'waiting_retell')),
+    q_idx INTEGER NOT NULL DEFAULT 0,
+    correct INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(tg_id),
+    source_hash TEXT NOT NULL,
+    source_text TEXT NOT NULL,
+    title TEXT,
+    analysis_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(student_id, source_hash)
+);
+CREATE TABLE IF NOT EXISTS material_items (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+    item_type TEXT NOT NULL CHECK (item_type IN ('phrase','term','word')),
+    en TEXT NOT NULL,
+    ru TEXT NOT NULL,
+    item_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_material_items_material ON material_items(material_id);
+CREATE INDEX IF NOT EXISTS idx_materials_student_hash ON materials(student_id, source_hash);
 """
+
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -117,6 +150,13 @@ def _migrate(conn):
     progress_cols = {r["name"] for r in conn.execute("PRAGMA table_info(lesson_progress)")}
     if "completed_at" not in progress_cols:
         conn.execute("ALTER TABLE lesson_progress ADD COLUMN completed_at TEXT")
+    daily_cols = {r["name"] for r in conn.execute("PRAGMA table_info(daily_usage)")}
+    if "material_calls" not in daily_cols:
+        conn.execute("ALTER TABLE daily_usage ADD COLUMN material_calls INTEGER NOT NULL DEFAULT 0")
+    srs_cols = {r["name"] for r in conn.execute("PRAGMA table_info(srs_cards)")}
+    if "material_id" not in srs_cols:
+        conn.execute("ALTER TABLE srs_cards ADD COLUMN material_id INTEGER REFERENCES materials(id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_srs_cards_material ON srs_cards(material_id)")
     conn.commit()
 
 
@@ -179,13 +219,68 @@ def record_progress(conn, student_id, lesson_id, status="completed", score=None)
     )
     conn.commit()
 
+def save_material(conn, student_id, source_hash, source_text, title, analysis_json):
+    cur = conn.execute(
+        "INSERT INTO materials (student_id, source_hash, source_text, title, analysis_json) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (student_id, source_hash, source_text, title, analysis_json),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+def get_material_by_hash(conn, student_id, source_hash):
+    return conn.execute(
+        "SELECT * FROM materials WHERE student_id=? AND source_hash=?", (student_id, source_hash)
+    ).fetchone()
+
+def get_material(conn, material_id):
+    return conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
+
+def list_materials(conn, student_id):
+    return conn.execute(
+        "SELECT * FROM materials WHERE student_id=? ORDER BY created_at DESC", (student_id,)
+    ).fetchall()
+
+def save_material_items(conn, material_id, items):
+    ids = []
+    for order, item in enumerate(items):
+        cur = conn.execute(
+            "INSERT INTO material_items (material_id, item_type, en, ru, item_order) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (material_id, item["type"], item["en"].strip(), item["ru"].strip(), order),
+        )
+        ids.append(cur.lastrowid)
+    conn.commit()
+    return ids
+
+def get_material_items(conn, material_id, item_type=None):
+    if item_type:
+        return conn.execute(
+            "SELECT * FROM material_items WHERE material_id=? AND item_type=? ORDER BY item_order",
+            (material_id, item_type),
+        ).fetchall()
+    return conn.execute(
+        "SELECT * FROM material_items WHERE material_id=? ORDER BY item_order", (material_id,)
+    ).fetchall()
+
 
 def log_review(conn, student_id, card_id, correct: bool, day=None):
-    from datetime import date
+    import os
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if day is None:
+        try:
+            from english_tutor.config import load_config
+            cfg = load_config()
+            tz = ZoneInfo(cfg.tz)
+        except Exception:
+            tz = ZoneInfo(os.environ.get("TZ", "Europe/Kiev"))
+        day = datetime.now(tz).strftime("%Y-%m-%d")
 
     conn.execute(
         "INSERT INTO srs_reviews (student_id, card_id, day, correct) VALUES (?, ?, ?, ?)",
-        (student_id, card_id, day or str(date.today()), 1 if correct else 0),
+        (student_id, card_id, day, 1 if correct else 0),
     )
     conn.commit()
 
@@ -234,11 +329,12 @@ def complete_story(conn, student_id: int, story_id: int, questions_score: int,
                    retell_transcript: str, retell_passed: bool, glossary: list[dict]):
     """Atomically record story completion and create SRS cards from glossary.
 
-    All writes — the ``story_progress`` INSERT plus every ``srs_cards`` INSERT
-    derived from the glossary — succeed together or roll back together under a
-    single ``with conn`` transaction.  Network calls (Groq/Whisper) must happen
-    *before* this function is called; only DB writes are enclosed here, keeping
-    the transaction short and free of I/O.
+    All writes - the ``story_progress`` INSERT plus every ``srs_cards`` INSERT
+    derived from the glossary - plus removal of the active-session row, all
+    succeed together or roll back together under a single ``with conn``
+    transaction.  Network calls (Groq/Whisper) must happen *before* this
+    function is called; only DB writes are enclosed here, keeping the
+    transaction short and free of I/O.
     """
     from datetime import date, timedelta
 
@@ -258,14 +354,56 @@ def complete_story(conn, student_id: int, story_id: int, questions_score: int,
                 "VALUES (?, ?, ?, 0, ?)",
                 (student_id, item["en"].strip(), item["ru"].strip(), due),
             )
+        conn.execute(
+            "DELETE FROM active_story_sessions WHERE student_id=? AND story_id=?",
+            (student_id, story_id),
+        )
         return cur.lastrowid
+
+
+def save_story_session(conn, student_id: int, story_id: int, stage: str,
+                      q_idx: int = 0, correct: int = 0):
+    """Insert or update the active story session for a student (upsert).
+
+    At most one active session per student is enforced by the PRIMARY KEY
+    on ``student_id`` - a second ``/story`` or ``/resume`` replaces the old
+    row.
+    """
+    conn.execute(
+        "INSERT INTO active_story_sessions "
+        "(student_id, story_id, stage, q_idx, correct, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now')) "
+        "ON CONFLICT(student_id) DO UPDATE SET "
+        "story_id=excluded.story_id, stage=excluded.stage, "
+        "q_idx=excluded.q_idx, correct=excluded.correct, "
+        "updated_at=datetime('now')",
+        (student_id, story_id, stage, q_idx, correct),
+    )
+    conn.commit()
+
+
+def get_active_session(conn, student_id: int):
+    """Return the active session row for a student, or None."""
+    return conn.execute(
+        "SELECT * FROM active_story_sessions WHERE student_id=?",
+        (student_id,),
+    ).fetchone()
+
+
+def delete_active_session(conn, student_id: int):
+    """Remove the active session for a student (used by /cancel and /resume-on-conflict)."""
+    conn.execute(
+        "DELETE FROM active_story_sessions WHERE student_id=?",
+        (student_id,),
+    )
+    conn.commit()
 
 
 
 def bump_usage(conn, student_id, day: str | None = None) -> int:
-    from datetime import date
+    from datetime import datetime, timezone
 
-    day = day or str(date.today())
+    day = day or datetime.now(timezone.utc).date().isoformat()
     conn.execute(
         "INSERT INTO daily_usage (student_id, day, llm_calls) VALUES (?, ?, 1) "
         "ON CONFLICT(student_id, day) DO UPDATE SET llm_calls = llm_calls + 1",

@@ -121,3 +121,113 @@ async def test_reminder_loop_sends_once_per_slot(conn):
     assert len(bot.sent) == 1
     chat_id, text = bot.sent[0]
     assert chat_id == 42 and "1 слов" in text
+
+
+def test_build_reminder_text_includes_nudge(conn):
+    """build_reminder_text appends a contextual nudge to the base reminder."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+    # No activity → fallback nudge
+    text = scheduler.build_reminder_text(due=3, conn=conn, tg_id=42)
+    assert "3 слов" in text
+    assert "/lessons" in text  # fallback nudge
+
+    # With a stale story session → nudge mentions /resume
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Kiev")
+    now_local = datetime.now(tz)
+    started_local = now_local - timedelta(days=3)
+    session_created_str = started_local.strftime("%Y-%m-%d %H:%M:%S")
+
+    conn.execute(
+        "INSERT INTO stories (student_id, level, topic, content_json, created_at) "
+        "VALUES (42, 'A2', 'run out of', '{}', ?)",
+        (session_created_str,),
+    )
+    conn.commit()
+    story_id = conn.execute("SELECT id FROM stories WHERE student_id=42").fetchone()["id"]
+    conn.execute(
+        "INSERT INTO active_story_sessions "
+        "(student_id, story_id, stage, q_idx, correct, created_at, updated_at) "
+        "VALUES (42, ?, 'answering_questions', 1, 0, ?, ?)",
+        (story_id, session_created_str, session_created_str),
+    )
+    conn.commit()
+    text2 = scheduler.build_reminder_text(due=0, conn=conn, tg_id=42)
+    assert "/resume" in text2
+    assert "run out of" in text2
+
+
+# --- Tests for calendar-day-based nudge thresholds ---
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+def test_build_reminder_text_stale_story_uses_resume(conn):
+    """A stale active story session (started 3 days ago Kyiv) → /resume nudge."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+
+    conn.execute(
+        "INSERT INTO stories (student_id, level, topic, content_json, created_at) "
+        "VALUES (42, 'A2', 'run out of', '{}', '2026-04-01 10:00:00')",
+    )
+    conn.commit()
+    story_id = conn.execute(
+        "SELECT id FROM stories WHERE student_id=42"
+    ).fetchone()["id"]
+
+    tz = ZoneInfo("Europe/Kiev")
+    now_local = datetime.now(tz)
+    started_local = now_local - timedelta(days=3)
+    session_created_str = started_local.strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "INSERT INTO active_story_sessions "
+        "(student_id, story_id, stage, q_idx, correct, created_at, updated_at) "
+        "VALUES (42, ?, 'answering_questions', 1, 0, ?, ?)",
+        (story_id, session_created_str, session_created_str),
+    )
+    conn.commit()
+
+    text = scheduler.build_reminder_text(due=0, conn=conn, tg_id=42)
+    assert "/resume" in text
+    assert "run out of" in text
+
+
+def test_build_reminder_text_no_activity_uses_lessons(conn):
+    """No activity at all → /lessons nudge."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+
+    text = scheduler.build_reminder_text(due=3, conn=conn, tg_id=42)
+    assert "/lessons" in text
+
+
+def test_build_reminder_text_uses_local_calendar_days(conn):
+    """Days should be computed using local calendar days, not raw UTC diff."""
+    db.upsert_student(conn, 42, status="active", level="A2")
+
+    conn.execute(
+        "INSERT INTO stories (student_id, level, topic, content_json, created_at) "
+        "VALUES (42, 'A2', 'run out of', '{}', '2026-04-01 10:00:00')",
+    )
+    conn.commit()
+    story_id = conn.execute(
+        "SELECT id FROM stories WHERE student_id=42"
+    ).fetchone()["id"]
+
+    tz = ZoneInfo("Europe/Kiev")
+    now_local = datetime.now(tz)
+    started_local = now_local - timedelta(days=2)
+    session_created_str = started_local.strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "INSERT INTO active_story_sessions "
+        "(student_id, story_id, stage, q_idx, correct, created_at, updated_at) "
+        "VALUES (42, ?, 'answering_questions', 1, 0, ?, ?)",
+        (story_id, session_created_str, session_created_str),
+    )
+    conn.commit()
+
+    text = scheduler.build_reminder_text(due=0, conn=conn, tg_id=42)
+    assert "/resume" in text
+
+

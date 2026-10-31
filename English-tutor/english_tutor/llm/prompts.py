@@ -64,3 +64,16 @@ def build_story_user_prompt(level: str, topic: str, recycling_words: list[str]) 
         f"Vocabulary to recycle and weave into the story: {recycled_str}."
     )
 
+
+MATERIAL_ANALYSIS_SYSTEM_PROMPT = (
+    "You are an expert English tutor. Analyze the provided English text and extract "
+    "useful learning items for a Russian-speaking learner. Return STRICT JSON only.\n"
+    "JSON Schema:\n"
+    "- 'title': str (short title of the text)\n"
+    "- 'phrases': list of up to 10 objects {'en': str, 'ru': str} (lexical chunks/collocations found)\n"
+    "- 'terms': list of up to 10 objects {'en': str, 'ru': str} (domain-specific terms)\n"
+    "- 'words': list of up to 10 objects {'en': str, 'ru': str} (frequent useful words)\n"
+    "Rules: only include items actually present or clearly supported by the text; "
+    "do not fabricate to reach counts; fewer is fine. Russian glosses. No markdown."
+)
+

@@ -48,9 +48,10 @@ def _pick_topic(level: str, raw_topic: str | None) -> str:
 async def story_answer(message, state: FSMContext, conn):
     data = await state.get_data()
     story = data.get("story")
+    story_id = data.get("story_id")
     q_idx = data.get("q_idx", 0)
     correct = data.get("correct", 0)
-    if story is None:
+    if story is None or story_id is None:
         await state.clear()
         await message.answer("История потерялась, начни заново: /story")
         return
@@ -69,10 +70,16 @@ async def story_answer(message, state: FSMContext, conn):
     else:
         feedback = f"❌ Не совсем. Правильно: {q['answer']} ({q['hint_ru']})"
     q_idx += 1
+    # Persist progress after every accepted answer
     if q_idx < len(questions):
+        db.save_story_session(
+            conn, message.from_user.id, story_id, "answering_questions", q_idx, correct
+        )
         await state.update_data(q_idx=q_idx, correct=correct)
         await message.answer(feedback + "\n\n" + _format_question(questions[q_idx], q_idx))
         return
+    # Transition to voice retelling — persist the stage change
+    db.save_story_session(conn, message.from_user.id, story_id, "waiting_retell", q_idx, correct)
     await state.set_state(StorySession.waiting_retell)
     await state.update_data(q_idx=q_idx, correct=correct)
     await message.answer(
@@ -91,7 +98,7 @@ async def story_retell(message, state: FSMContext, conn, llm):
     story = data.get("story")
     story_id = data.get("story_id")
     correct = data.get("correct", 0)
-    if story is None:
+    if story is None or story_id is None:
         await state.clear()
         await message.answer("История потерялась, начни заново: /story")
         return
@@ -127,6 +134,18 @@ async def story_retell(message, state: FSMContext, conn, llm):
         f"Понимание текста: {correct}/{total}. "
         f"💡 Фразы из глоссария добавлены в /review."
     )
+
+
+@router.message(Command("cancel"))
+async def story_cancel(message, state: FSMContext, conn):
+    """Cancel a /story session: clear in-memory FSM and remove durable session."""
+    session = db.get_active_session(conn, message.from_user.id)
+    if session is not None:
+        db.delete_active_session(conn, message.from_user.id)
+        await message.answer("🎹 Зачитывание истории отменено. Чтобы начать заново: /story")
+    else:
+        await message.answer("Отменено. /start — заново, /lessons — уроки, /drill — говорение.")
+    await state.clear()
 @router.message(Command("story"))
 async def story_cmd(message, state: FSMContext, conn, llm):
     student = _guard(message, conn)
@@ -157,7 +176,62 @@ async def story_cmd(message, state: FSMContext, conn, llm):
         conn, student["tg_id"], student["level"], topic,
         json.dumps(story, ensure_ascii=False),
     )
+    # Persist the new active session so it survives a process restart
+    db.save_story_session(conn, student["tg_id"], story_id, "answering_questions")
     await state.set_state(StorySession.answering_questions)
     await state.update_data(story_id=story_id, story=story, q_idx=0, correct=0)
     for part in split_for_telegram(stories.format_story(story)):
         await message.answer(part)
+
+
+@router.message(Command("resume"))
+async def resume_cmd(message, state: FSMContext, conn):
+    """Restore an interrupted /story session from durable storage."""
+    student = _guard(message, conn)
+    if student is None:
+        await message.answer("Сначала пройди регистрацию: /start")
+        return
+    session = db.get_active_session(conn, message.from_user.id)
+    if session is None:
+        await message.answer("У тебя нет незавершённой истории. Начни: /story")
+        return
+    story = db.get_story(conn, session["story_id"])
+    if story is None or story["student_id"] != student["tg_id"]:
+        db.delete_active_session(conn, message.from_user.id)
+        await state.clear()
+        await message.answer("Сессия повреждена, начни заново: /story")
+        return
+    story_data = json.loads(story["content_json"])
+    if session["stage"] == "answering_questions":
+        if session["q_idx"] >= len(story_data["comprehension_questions"]):
+            await state.set_state(StorySession.waiting_retell)
+            await state.update_data(
+                story_id=session["story_id"], story=story_data,
+                q_idx=session["q_idx"], correct=session["correct"],
+            )
+            await message.answer(
+                "🎤 **Задание на говорение (Retell):**\n"
+                + story_data["retell_prompt"]
+                + "\n\nНажми микрофон и наговори ответ голосом."
+            )
+            return
+        await state.set_state(StorySession.answering_questions)
+        await state.update_data(
+            story_id=session["story_id"], story=story_data,
+            q_idx=session["q_idx"], correct=session["correct"],
+        )
+        questions = story_data["comprehension_questions"]
+        await message.answer(
+            f"📖 Продолжаем историю! Вопрос {session['q_idx'] + 1}/{len(questions)}:\n"
+            + _format_question(questions[session["q_idx"]], session["q_idx"])
+        )
+    else:
+        await state.set_state(StorySession.waiting_retell)
+        await state.update_data(
+            story_id=session["story_id"], story=story_data,
+            q_idx=session["q_idx"], correct=session["correct"],
+        )
+        await message.answer(
+            "🎤 Давай дай ответ голосом — перескажи историю.\n"
+            + story_data["retell_prompt"]
+        )
