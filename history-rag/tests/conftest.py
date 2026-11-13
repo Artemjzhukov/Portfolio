@@ -100,3 +100,16 @@ def make_rtf():
 @pytest.fixture
 def make_docx():
     return build_docx
+
+@pytest.fixture
+def mock_rag_ready():
+    """API-тесты не загружают реальную embedding-модель (CPU torch + Windows).
+    Мокаем TheoryRetriever._ensure_ready -> True.
+    """
+    import app.services.rag as rag_mod
+    original = rag_mod.TheoryRetriever._ensure_ready
+    def _mock_ensure_ready(self):
+        return True
+    rag_mod.TheoryRetriever._ensure_ready = _mock_ensure_ready
+    yield
+    rag_mod.TheoryRetriever._ensure_ready = original

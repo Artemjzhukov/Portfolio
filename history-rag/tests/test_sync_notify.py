@@ -111,34 +111,62 @@ class TestNotionPayload:
 
 class TestBackgroundSync:
     def test_send_is_nonblocking_and_never_raises(self):
+        import threading
         import time
 
         from app.services.notify import schedule_result_sync
 
+        sender_started = threading.Event()
+        main_returned = threading.Event()
+        sender_finished = threading.Event()
+        sender_errors = []
         calls = []
+        call_count = [0]
 
         def slow_post(url, payload):
-            import time as _t
+            sender_started.set()
 
-            _t.sleep(0.05)
+            # Если schedule_result_sync блокирует, main_returned не будет set.
+            if not main_returned.wait(timeout=1.0):
+                sender_errors.append("main thread did not return in time")
+                return False
+
+            time.sleep(0.05)
             calls.append((url, payload))
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                sender_finished.set()
             return True
 
-        started = time.monotonic()
-        schedule_result_sync(
-            _record(), sender=slow_post,
-            notion_url="https://notion.example/pages",
-            telegram_url="https://telegram.example/send",
-            notify=None,
-        )
-        elapsed = time.monotonic() - started
-        assert elapsed < 0.05, "синк должен возвращаться сразу, без блокировки"
-        # фоновая отправка всё же состоялась (ждём оба вызова)
-        deadline = time.monotonic() + 2.0
-        while len(calls) < 2 and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert len(calls) == 2
+        def run_schedule():
+            try:
+                schedule_result_sync(
+                    _record(),
+                    sender=slow_post,
+                    notion_url="https://notion.example/pages",
+                    telegram_url="https://telegram.example/send",
+                    notify=None,
+                )
+            except Exception as exc:  # noqa: BLE001
+                sender_errors.append(f"schedule_result_sync raised: {exc!r}")
 
+        worker = threading.Thread(target=run_schedule, daemon=True)
+        worker.start()
+
+        # Если schedule_result_sync блокирует, worker не завершится за 1 секунду.
+        worker.join(timeout=1.0)
+        assert not worker.is_alive(), (
+            "schedule_result_sync blocked instead of returning immediately"
+        )
+
+        # Основной поток вернулся из schedule_result_sync.
+        main_returned.set()
+
+        assert sender_started.wait(timeout=1.0)
+        assert sender_finished.wait(timeout=2.0)
+        assert not sender_errors, sender_errors
+        assert len(calls) == 2
+        
     def test_sender_errors_are_swallowed(self):
         from app.services.notify import schedule_result_sync
 

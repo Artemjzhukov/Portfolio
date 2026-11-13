@@ -514,7 +514,7 @@ class TestFactCheckStatuses:
 
 
 @pytest.fixture
-def client(settings, monkeypatch):
+def client(settings, monkeypatch, mock_rag_ready):
     """API-клиент с подменённым пайплайном (LLM не вызывается)."""
     from app.schemas import AssessmentResult, TaskBreakdown
 
