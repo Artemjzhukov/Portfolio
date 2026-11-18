@@ -6,11 +6,15 @@ def test_normalize_rejects_concatenated():
     assert me.check_pronunciation("end-to-end", "endtoend") is False
 
 def test_normalize_hyphen_variant():
-    assert me.normalize_for_match("end-to-end ownership") == me.normalize_for_match("end to end ownership")
+    assert me.normalize_for_match("end-to-end ownership") == me.normalize_for_match(
+        "end to end ownership"
+    )
 
 
 def test_normalize_rejects_different():
-    assert me.normalize_for_match("end to end ownership") != me.normalize_for_match("end to end leadership")
+    assert me.normalize_for_match("end to end ownership") != me.normalize_for_match(
+        "end to end leadership"
+    )
 
 
 def test_check_pronunciation_hyphen():

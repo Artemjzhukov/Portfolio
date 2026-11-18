@@ -1,4 +1,7 @@
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from english_tutor import db, scheduler
@@ -160,8 +163,6 @@ def test_build_reminder_text_includes_nudge(conn):
 
 
 # --- Tests for calendar-day-based nudge thresholds ---
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 
 def test_build_reminder_text_stale_story_uses_resume(conn):

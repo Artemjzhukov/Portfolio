@@ -1,6 +1,7 @@
 import pytest
 
 from english_tutor import db
+from english_tutor.handlers import materials as materials_h
 from english_tutor.handlers import review as review_h
 from english_tutor.services import srs
 
@@ -32,6 +33,17 @@ class FakeState:
 
     async def clear(self):
         self.state, self.data = None, {}
+
+
+class FakeCallback:
+    def __init__(self, data, tg_id=42):
+        self.data = data
+        self.from_user = type("U", (), {"id": tg_id})()
+        self.message = FakeMessage(tg_id=tg_id)
+        self.answered = 0
+
+    async def answer(self, *a, **kw):
+        self.answered += 1
 
 
 @pytest.fixture
@@ -82,11 +94,12 @@ async def test_review_suggests_material_review(conn, st):
     srs.ensure_card(conn, 42, "cat", "кошка", material_id=mid)
     from datetime import date, timedelta
 
-    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='cat'", (str(date.today() - timedelta(days=1)),))
+    due = str(date.today() - timedelta(days=1))
+    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='cat'", (due,))
     conn.commit()
     # also a global due card
     srs.ensure_card(conn, 42, "dog", "собака")
-    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='dog'", (str(date.today() - timedelta(days=1)),))
+    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='dog'", (due,))
     conn.commit()
     msg = FakeMessage(text="/review", tg_id=42)
     await review_h.review_cmd(msg, st, conn)
@@ -98,8 +111,33 @@ async def test_review_no_suggestion_without_material_cards(conn, st):
     srs.ensure_card(conn, 42, "dog", "собака")
     from datetime import date, timedelta
 
-    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='dog'", (str(date.today() - timedelta(days=1)),))
+    due = str(date.today() - timedelta(days=1))
+    conn.execute("UPDATE srs_cards SET due_date=? WHERE word_en='dog'", (due,))
     conn.commit()
     msg = FakeMessage(text="/review", tg_id=42)
     await review_h.review_cmd(msg, st, conn)
     assert not any("reviewmaterial" in t for t in msg.sent)
+
+
+async def test_material_exercise_done_reports_total(conn, st):
+    """`mat:ex:done` must report the queue length loaded from FSM storage.
+
+    Regression: the handler referenced a local `queue` variable that only
+    existed in the sibling branch, raising NameError after clearing the
+    session, so the student never saw the result summary.
+    """
+    db.upsert_student(conn, 42, status="active", level="B1")
+    await st.update_data(
+        analysis={"title": "T"},
+        correct=1,
+        exercise_queue=[
+            {"type": "translation", "item": {"en": "cat", "ru": "кошка"}},
+            {"type": "spelling", "item": {"en": "dog", "ru": "собака"}},
+        ],
+    )
+    cb = FakeCallback("mat:ex:done")
+    await materials_h.cb_exercise(cb, st, conn)
+
+    assert any("Готово! Верно: 1/2." in t for t in cb.message.sent)
+    assert st.state is None
+    assert cb.answered == 1

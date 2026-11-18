@@ -87,7 +87,9 @@ async def review_flow(message, state: FSMContext, conn, llm):
                 "Ещё есть слова к повторению: /review"
             )
         else:
-            await message.answer(f"{feedback}\n\nГотово! {data['correct']}/{len(data['card_ids'])} верно 🎉")
+            await message.answer(
+                f"{feedback}\n\nГотово! {data['correct']}/{len(data['card_ids'])} верно 🎉"
+            )
 
 @router.message(Command("reviewmaterial"))
 async def review_material_cmd(message, state: FSMContext, conn):

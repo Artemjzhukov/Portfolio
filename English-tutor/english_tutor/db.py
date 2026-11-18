@@ -97,6 +97,19 @@ CREATE TABLE IF NOT EXISTS story_progress (
     retell_passed INTEGER NOT NULL DEFAULT 1,
     completed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS active_lesson_sessions (
+    student_id INTEGER PRIMARY KEY REFERENCES students(tg_id),
+    lesson_id INTEGER NOT NULL REFERENCES lessons(id),
+    kind TEXT NOT NULL,
+    level TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    stage TEXT NOT NULL CHECK (stage IN ('exercising','voice_task')),
+    ex_idx INTEGER NOT NULL DEFAULT 0,
+    correct INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_active_lesson_sessions_lesson ON active_lesson_sessions(lesson_id);
 CREATE TABLE IF NOT EXISTS active_story_sessions (
     student_id INTEGER PRIMARY KEY REFERENCES students(tg_id),
     story_id INTEGER NOT NULL REFERENCES stories(id),
@@ -106,6 +119,7 @@ CREATE TABLE IF NOT EXISTS active_story_sessions (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
 
 CREATE TABLE IF NOT EXISTS materials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,6 +213,41 @@ def save_test_result(conn, student_id, written_score, voice_transcript, suggeste
         "VALUES (?, ?, ?, ?)",
         (student_id, written_score, voice_transcript, suggested_level),
     )
+
+
+def save_lesson_session(
+    conn,
+    student_id,
+    lesson_id,
+    kind,
+    level,
+    topic,
+    stage="exercising",
+    ex_idx=0,
+    correct=0,
+):
+    conn.execute(
+        "INSERT INTO active_lesson_sessions "
+        "(student_id, lesson_id, kind, level, topic, stage, ex_idx, correct, "
+        "created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')) "
+        "ON CONFLICT(student_id) DO UPDATE SET lesson_id=excluded.lesson_id, "
+        "kind=excluded.kind, level=excluded.level, topic=excluded.topic, "
+        "stage=excluded.stage, ex_idx=excluded.ex_idx, correct=excluded.correct, "
+        "updated_at=datetime('now')",
+        (student_id, lesson_id, kind, level, topic, stage, ex_idx, correct),
+    )
+    conn.commit()
+
+
+def get_lesson_session(conn, student_id):
+    return conn.execute(
+        "SELECT * FROM active_lesson_sessions WHERE student_id=?", (student_id,)
+    ).fetchone()
+
+
+def delete_lesson_session(conn, student_id):
+    conn.execute("DELETE FROM active_lesson_sessions WHERE student_id=?", (student_id,))
     conn.commit()
 
 

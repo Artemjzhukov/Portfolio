@@ -153,11 +153,19 @@ async def material_text(message: Message, state: FSMContext, conn, llm):
         analysis = json.loads(cached["analysis_json"])
         material = cached
         items = _db.get_material_items(conn, material["id"])
-        item_list = [{"id": r["id"], "type": r["item_type"], "en": r["en"], "ru": r["ru"]} for r in items]
+        item_list = [
+            {"id": r["id"], "type": r["item_type"], "en": r["en"], "ru": r["ru"]}
+            for r in items
+        ]
         await state.set_state(MaterialSession.selecting)
-        await state.update_data(material_id=material["id"], analysis=analysis, items=item_list, selected=set())
+        await state.update_data(
+            material_id=material["id"], analysis=analysis, items=item_list, selected=set()
+        )
         await message.answer(_materials.format_analysis(material, analysis))
-        await message.answer("Отметь элементы для сохранения:", reply_markup=material_items_keyboard(item_list, set()))
+        await message.answer(
+            "Отметь элементы для сохранения:",
+            reply_markup=material_items_keyboard(item_list, set()),
+        )
         return
 
     if not limits.try_reserve_material_analysis(conn, message.from_user.id):
@@ -171,15 +179,24 @@ async def material_text(message: Message, state: FSMContext, conn, llm):
             conn, llm, message.from_user.id, text, level=student["level"]
         )
     except Exception:
-        await message.answer("Не удалось проанализировать материал. Попробуй ещё раз или вернись в меню.")
+        await message.answer(
+            "Не удалось проанализировать материал. Попробуй ещё раз или вернись в меню."
+        )
         await state.set_state(MaterialSession.waiting_text)
         return
     items = _db.get_material_items(conn, material["id"])
-    item_list = [{"id": r["id"], "type": r["item_type"], "en": r["en"], "ru": r["ru"]} for r in items]
+    item_list = [
+        {"id": r["id"], "type": r["item_type"], "en": r["en"], "ru": r["ru"]} for r in items
+    ]
     await state.set_state(MaterialSession.selecting)
-    await state.update_data(material_id=material["id"], analysis=analysis, items=item_list, selected=set())
+    await state.update_data(
+        material_id=material["id"], analysis=analysis, items=item_list, selected=set()
+    )
     await message.answer(_materials.format_analysis(material, analysis))
-    await message.answer("Отметь элементы для сохранения:", reply_markup=material_items_keyboard(item_list, set()))
+    await message.answer(
+        "Отметь элементы для сохранения:",
+        reply_markup=material_items_keyboard(item_list, set()),
+    )
 
 @router.callback_query(lambda c: c.data and c.data.startswith("mat:toggle:"))
 async def cb_toggle(cb: CallbackQuery, state: FSMContext):
@@ -246,10 +263,12 @@ async def cb_exercise(cb: CallbackQuery, state: FSMContext, conn):
             conn.commit()
             lesson_id = cur.lastrowid
         db.record_progress(conn, cb.from_user.id, lesson_id, "completed", data.get("correct", 0))
+        total = len(data.get("exercise_queue", []))
         await state.clear()
         await cb.message.answer(
-            f"Готово! Верно: {data.get('correct',0)}/{len(queue)}.\n"
-            "Дальше: /review — повторение, /materials — мои материалы, /material — новый импорт, /lessons — уроки."
+            f"Готово! Верно: {data.get('correct',0)}/{total}.\n"
+            "Дальше: /review — повторение, /materials — мои материалы, "
+            "/material — новый импорт, /lessons — уроки."
         )
         await cb.answer()
         return
@@ -331,7 +350,8 @@ async def material_exercise_flow(message: Message, state: FSMContext, conn, llm)
             ok = False
             skip = True
         else:
-            ok = material_exercises.normalize_for_match(answer) == material_exercises.normalize_for_match(item["en"])
+            expected = material_exercises.normalize_for_match(item["en"])
+            ok = material_exercises.normalize_for_match(answer) == expected
             skip = False
     else:
         typed = (message.text or "").strip()
