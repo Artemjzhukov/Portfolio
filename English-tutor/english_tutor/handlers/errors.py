@@ -20,9 +20,15 @@ def redact(text: str) -> str:
 
 
 @router.errors()
-async def on_error(event, exception: Exception):
+async def on_error(event, exception=None):
+    if exception is None:
+        exception = getattr(event, "exception", None)
+    if exception is None:
+        return
     logger.error("unhandled error: %s\n%s", exception, redact(traceback.format_exc()))
     message = getattr(event, "message", None)
+    if message is None and hasattr(event, "update"):
+        message = getattr(event.update, "message", None)
     if message is None:
         return
     name = type(exception).__name__.lower()

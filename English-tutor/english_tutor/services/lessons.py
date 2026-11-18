@@ -94,7 +94,7 @@ def format_lesson(lesson: dict) -> str:
         "🎯 Программа тренировки:",
     ]
     for i, ex in enumerate(lesson["exercises"], 1):
-        lines.append(f"{i}. [{ex['type']}] {ex['instruction_ru']}")
+        lines.append(f"{i}. [{ex['type']}] {ex.get('instruction_ru', '')}")
     lines += [
         "",
         "🎤 Финальное задание на говорение:",

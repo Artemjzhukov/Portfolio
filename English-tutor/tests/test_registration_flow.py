@@ -245,7 +245,7 @@ async def test_lesson_completion_adds_vocab_and_progress(conn, st):
     # K1: progress row with score = 6 correct answers
     row = conn.execute("SELECT * FROM lesson_progress").fetchone()
     assert row is not None and row["status"] == "completed" and row["score"] == 6
-    assert st.state is None  # lesson flow finished
+    assert st.state is not None  # final speaking task
 
 
 async def test_lesson_flow_ignores_sticker(conn, st):
